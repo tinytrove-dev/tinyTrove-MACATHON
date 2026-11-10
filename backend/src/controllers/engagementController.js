@@ -1,3 +1,5 @@
+import { distanceMetres, getStoreLocation } from "../lib/geocode.js";
+
 const MAX_COMMENT_LENGTH = 500;
 const CHECK_STATUSES = ["validated", "sold_out", "not_real"];
 const RECENT_DAYS = 7; // sold-out reports newer than this count as "recent"
@@ -77,16 +79,6 @@ const getCheckSummary = async (db, postId, userId) => {
   return summarizeChecks(data, userId);
 };
 
-// Great-circle distance in metres
-const distanceMetres = (lat1, lng1, lat2, lng2) => {
-  const rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad;
-  const dLng = (lng2 - lng1) * rad;
-  const a =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6371e3 * Math.asin(Math.sqrt(a));
-};
-
 // --- CHECKS ---
 // PUT { status: "validated" | "sold_out" | "not_real", lat, lng, accuracy }.
 // Replaces the user's previous check on this post. Anyone can report sold out; only
@@ -107,7 +99,7 @@ export const setCheck = async (req, res) => {
 
     const { data: post, error: postError } = await req.supabase
       .from("posts")
-      .select("user_id, stores ( lat, lng, radius_m )")
+      .select("user_id, stores ( id, name, address, lat, lng, radius_m )")
       .eq("id", postId)
       .maybeSingle();
 
@@ -119,8 +111,8 @@ export const setCheck = async (req, res) => {
 
     // Distance stays null when the store's location isn't known, so it can't be checked
     let distance = null;
-    const store = post.stores;
-    if (store?.lat != null && store?.lng != null) {
+    const store = post.stores && (await getStoreLocation(post.stores));
+    if (store) {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         return res.status(400).json({ error: "Turn on location to check this post" });
       }

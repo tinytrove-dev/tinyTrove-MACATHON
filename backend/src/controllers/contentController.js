@@ -1,7 +1,6 @@
 import { CHECKS_SELECT, summarizeChecks } from "./engagementController.js";
 
-const mapsApiKey =
-  process.env.GOOGLE_MAPS_API_KEY || process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+import { geocode } from "../lib/geocode.js";
 
 const cleanId = (id, prefix) => String(id).replace(new RegExp(`^${prefix}-`), "");
 
@@ -245,7 +244,7 @@ export const getStores = async (req, res) => {
   }
 };
 
-// Geocodes the store name to a formatted address, then saves it
+// Geocodes the store name to an address and location, then saves it
 export const createStore = async (req, res) => {
   try {
     const name = String(req.body.name || "").trim();
@@ -254,46 +253,17 @@ export const createStore = async (req, res) => {
       return res.status(400).json({ error: "Store name is required" });
     }
 
-    let address = name;
-    let coords = null; // { lat, lng }, so checks can require being at the store
-    if (mapsApiKey) {
-      const response = await fetch(
-        "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-          encodeURIComponent(name) +
-          "&key=" +
-          mapsApiKey
-      );
-      const geo = await response.json();
-      address = geo.results?.[0]?.formatted_address || name;
-      coords = geo.results?.[0]?.geometry?.location || null;
-      if (geo.status !== "OK") console.warn("Google geocoding failed:", geo.status, geo.error_message);
-    } else {
-      console.warn("GOOGLE_MAPS_API_KEY not set; saving store without geocoding");
-    }
-
-    // Fall back to OpenStreetMap when Google can't place it
-    if (!coords) {
-      try {
-        const response = await fetch(
-          "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=" +
-            encodeURIComponent(address),
-          { headers: { "User-Agent": "macathon-2026" } }
-        );
-        const [place] = await response.json();
-        if (place) coords = { lat: Number(place.lat), lng: Number(place.lon) };
-      } catch (err) {
-        console.warn("OpenStreetMap geocoding failed:", err.message);
-      }
-    }
+    const place = await geocode(name);
 
     const { data, error } = await req.supabase
       .from("stores")
       .insert([
         {
           name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
-          address,
-          lat: coords?.lat ?? null,
-          lng: coords?.lng ?? null,
+          address: place?.address || name,
+          lat: place?.lat ?? null,
+          lng: place?.lng ?? null,
+          radius_m: place?.radius_m,
         },
       ])
       .select()
