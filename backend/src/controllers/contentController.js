@@ -255,6 +255,7 @@ export const createStore = async (req, res) => {
     }
 
     let address = name;
+    let coords = null; // { lat, lng }, so checks can require being at the store
     if (mapsApiKey) {
       const response = await fetch(
         "https://maps.googleapis.com/maps/api/geocode/json?address=" +
@@ -264,8 +265,25 @@ export const createStore = async (req, res) => {
       );
       const geo = await response.json();
       address = geo.results?.[0]?.formatted_address || name;
+      coords = geo.results?.[0]?.geometry?.location || null;
+      if (geo.status !== "OK") console.warn("Google geocoding failed:", geo.status, geo.error_message);
     } else {
       console.warn("GOOGLE_MAPS_API_KEY not set; saving store without geocoding");
+    }
+
+    // Fall back to OpenStreetMap when Google can't place it
+    if (!coords) {
+      try {
+        const response = await fetch(
+          "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=" +
+            encodeURIComponent(address),
+          { headers: { "User-Agent": "macathon-2026" } }
+        );
+        const [place] = await response.json();
+        if (place) coords = { lat: Number(place.lat), lng: Number(place.lon) };
+      } catch (err) {
+        console.warn("OpenStreetMap geocoding failed:", err.message);
+      }
     }
 
     const { data, error } = await req.supabase
@@ -274,6 +292,8 @@ export const createStore = async (req, res) => {
         {
           name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
           address,
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
         },
       ])
       .select()

@@ -2,27 +2,32 @@ import React, { useEffect, useState } from "react";
 import { View, Pressable, Text, StyleSheet, Alert } from "react-native";
 import { postApi } from "../lib/postApi";
 import { timeAgo } from "../lib/timeAgo";
+import { getCheckLocation } from "../lib/location";
+
+export type CheckStatus = "validated" | "sold_out" | "not_real";
 
 export type CheckSummary = {
   validation_count: number;
   sold_out_count: number;
+  not_real_count: number;
   recent_sold_out_count: number; // sold-out reports in the last 7 days
-  stock_status: "validated" | "sold_out" | null; // from the most recent check
+  stock_status: "validated" | "sold_out" | null; // null = unconfirmed; the server weighs recent checks
   stock_updated_at: string | null;
-  my_status: "validated" | "sold_out" | null;
+  my_status: CheckStatus | null;
 };
 
 type Props = {
   postId: string;
   summary: CheckSummary;
   isSignedIn: boolean;
-  isMine: boolean; // authors can report sold out, but not validate
+  isMine: boolean; // authors can report sold out, but not validate or say it's not real
   onRequireSignIn?: () => void;
   onChange?: (summary: CheckSummary) => void;
   trailing?: React.ReactNode; // extra controls shown at the end of the button row
 };
 
-// Validated = "I saw it there too"; Sold out = "it was real, but it's gone now".
+// Validated = "I saw it there too"; Sold out = "it was real, but it's gone now";
+// Not real = "I went and it was never there". You have to be at the store to check.
 // Each user has one status per post; tapping your current status clears it.
 export default function PostChecks({
   postId,
@@ -40,28 +45,36 @@ export default function PostChecks({
     setSummary(initialSummary);
   }, [postId, initialSummary]);
 
-  const handlePress = async (status: "validated" | "sold_out") => {
+  const handlePress = async (status: CheckStatus) => {
     if (!isSignedIn) return onRequireSignIn?.();
     if (busy) return;
 
     const next = summary.my_status === status ? null : status;
     const previous = summary;
+    setBusy(true);
 
-    // Optimistic update of the counts; the server's answer replaces it
-    const counts = { validated: summary.validation_count, sold_out: summary.sold_out_count };
+    // Clearing your check doesn't need you to be there
+    const location = next ? await getCheckLocation() : null;
+
+    // Optimistic update of the counts; the server's answer replaces it. Stock status is
+    // left alone: it depends on everyone's checks, so only the server can work it out.
+    const counts = {
+      validated: summary.validation_count,
+      sold_out: summary.sold_out_count,
+      not_real: summary.not_real_count,
+    };
     if (summary.my_status) counts[summary.my_status]--;
     if (next) counts[next]++;
     setSummary({
       ...summary,
       validation_count: counts.validated,
       sold_out_count: counts.sold_out,
+      not_real_count: counts.not_real,
       my_status: next,
-      ...(next && { stock_status: next, stock_updated_at: new Date().toISOString() }),
     });
-    setBusy(true);
 
     try {
-      const result = await postApi.setCheck(postId, next);
+      const result = await postApi.setCheck(postId, next, location);
       setSummary(result);
       onChange?.(result);
     } catch (error: any) {
@@ -107,6 +120,18 @@ export default function PostChecks({
           </Text>
         </Pressable>
 
+        <Pressable
+          onPress={() => handlePress("not_real")}
+          disabled={isMine}
+          style={[styles.button, styles.notRealButton, my_status === "not_real" && styles.notRealActive, isMine && styles.disabled]}
+          accessibilityRole="button"
+          accessibilityLabel={`Not real, ${summary.not_real_count} reports`}
+        >
+          <Text style={[styles.text, my_status === "not_real" && styles.activeText]}>
+            ⚑ Not real{summary.not_real_count ? ` · ${summary.not_real_count}` : ""}
+          </Text>
+        </Pressable>
+
         {trailing}
       </View>
     </View>
@@ -137,6 +162,8 @@ const styles = StyleSheet.create({
   soldOutButton: { borderColor: "#C9784A" },
   validatedActive: { backgroundColor: "#71A5D3" },
   soldOutActive: { backgroundColor: "#C9784A" },
+  notRealButton: { borderColor: "#8A6F5C" },
+  notRealActive: { backgroundColor: "#8A6F5C" },
   disabled: { borderColor: "#C9B8A6" },
   text: { color: "#2A211D", fontSize: 14, fontWeight: "600" },
   activeText: { color: "#FFF8F0" },

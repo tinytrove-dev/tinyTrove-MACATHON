@@ -5,9 +5,10 @@ import { CHECKS_SELECT, summarizeChecks } from "./engagementController.js";
 
 // --- RANKING ---
 // popularity = (validations * 1 + comments * 0.5 + 1) * 0.5 ^ (age / half-life)
-//              * 0.5 ^ (recent sold-out reports), floored at 0.1, if the latest
-//                check says it's sold out. One report could be a mistake; several sink it.
-//                While sold out, validations don't count (they're out of date).
+//              * 0.5 ^ (recent sold-out reports), floored at 0.1, if its checks add
+//                up to sold out (see summarizeChecks). While sold out, validations
+//                don't count (they're out of date).
+//              * 0.1 once enough people say it was never there.
 // Signed-in users get that multiplied by (1 + boosts) for posts whose treasures
 // match their communities or the posts they've engaged with / made.
 // All the knobs are here so they're easy to tune.
@@ -16,6 +17,7 @@ const HALF_LIFE_HOURS = 72;       // a post's score halves every 3 days
 const WEIGHTS = { validation: 1, comment: 0.5 };
 const SOLD_OUT_PENALTY = 0.5;     // per recent sold-out report...
 const SOLD_OUT_FLOOR = 0.1;       // ...but never below this: still useful history
+const NOT_REAL_REPORTS = 2;       // this many "not real" reports sink a post to the floor
 const BOOSTS = {
   community: 1.5,  // treasure belongs to one of your communities
   engagedTag: 1.0, // treasure appears on posts you checked or commented on
@@ -121,6 +123,7 @@ export const getFeed = async (req, res) => {
           const reports = Math.max(checks.recent_sold_out_count, 1);
           score *= Math.max(Math.pow(SOLD_OUT_PENALTY, reports), SOLD_OUT_FLOOR);
         }
+        if (checks.not_real_count >= NOT_REAL_REPORTS) score *= SOLD_OUT_FLOOR;
 
         // Personal boosts (never applied to the user's own posts)
         let reason = null;

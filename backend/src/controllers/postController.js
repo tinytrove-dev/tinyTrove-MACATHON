@@ -18,7 +18,18 @@ export const createPost = async (req, res) => {
       return res.status(400).json({ error: "Location is required" });
     }
 
-    // 2. Insert into the database
+    // 2. Link the post to its store (location is the store's name), so checks can
+    // tell whether someone is actually there
+    const { data: store, error: storeError } = await req.supabase
+      .from("stores")
+      .select("id")
+      .ilike("name", String(location))
+      .limit(1)
+      .maybeSingle();
+
+    if (storeError) console.error("Store lookup failed:", storeError);
+
+    // 3. Insert into the database
     const { data: postData, error: postError } = await req.supabase
       .from("posts")
       .insert([
@@ -27,13 +38,14 @@ export const createPost = async (req, res) => {
           photo_url: image,
           caption: description,
           location: location,
+          store_id: store?.id ?? null,
           // The current schema still expects a single treasure_tag FK on posts.
           treasure_tag: normalizedTags[0].id,
         },
       ])
       .select();
 
-    // 3. Check for database errors specific to THIS query
+    // 4. Check for database errors specific to THIS query
     if (postError) {
       console.error("Database Error:", postError);
       return res.status(400).json({ error: postError.message });
@@ -50,7 +62,7 @@ export const createPost = async (req, res) => {
 
     if (tagError) throw tagError;
 
-    // 4. Send the newly created post data back to the app
+    // 5. Send the newly created post data back to the app
     res.status(201).json(postData);
 
   } catch (err) {

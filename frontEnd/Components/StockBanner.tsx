@@ -3,16 +3,20 @@ import { View, Text, StyleSheet } from "react-native";
 import { timeAgo } from "../lib/timeAgo";
 import type { CheckSummary } from "./PostChecks";
 
-// Prominent warning shown above a post while its latest check says sold out,
-// so nobody makes a wasted trip. Disappears once someone validates it again.
+// Prominent warning shown above a post while its checks add up to sold out (or
+// people say it was never there), so nobody makes a wasted trip. Disappears once
+// enough people validate it again.
 export default function StockBanner({ summary, compact = false }: { summary: CheckSummary; compact?: boolean }) {
   if (summary.stock_status !== "sold_out" || !summary.stock_updated_at) return null;
 
   const recent = summary.recent_sold_out_count;
+  const notReal = summary.not_real_count;
   const ago = timeAgo(summary.stock_updated_at);
   const when = /\d[mhd]$/.test(ago) ? `${ago} ago` : `on ${ago}`; // timeAgo gives a date past 30 days
   const title =
-    recent >= 2
+    notReal >= 2
+      ? `${notReal} people say this was never there`
+      : recent >= 2
       ? `${recent} people have recently marked this as out of stock`
       : recent === 1
         ? "Recently marked as out of stock"

@@ -51,11 +51,12 @@ export const postApi = {
     });
     return response.data;
   },
-  // status: "validated" | "sold_out", or null to clear your check.
-  // Returns { validation_count, sold_out_count, stock_status, stock_updated_at, my_status }
-  setCheck: async (postId, status) => {
+  // status: "validated" | "sold_out" | "not_real", or null to clear your check.
+  // location: { lat, lng, accuracy } - needed when the post's store location is known.
+  // Returns { validation_count, sold_out_count, not_real_count, stock_status, stock_updated_at, my_status }
+  setCheck: async (postId, status, location) => {
     const response = status
-      ? await axiosInstance.put(`/post/${postId}/check`, { status })
+      ? await axiosInstance.put(`/post/${postId}/check`, { status, ...location })
       : await axiosInstance.delete(`/post/${postId}/check`);
     return response.data;
   },
