@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Pressable, Text, StyleSheet, Alert } from "react-native";
+import { View, Pressable, Text, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { postApi } from "../lib/postApi";
 import { timeAgo } from "../lib/timeAgo";
 import { getCheckLocation } from "../lib/location";
@@ -39,7 +39,7 @@ export default function PostChecks({
   trailing,
 }: Props) {
   const [summary, setSummary] = useState(initialSummary);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<CheckStatus | null>(null); // the button waiting on the server
 
   useEffect(() => {
     setSummary(initialSummary);
@@ -47,17 +47,15 @@ export default function PostChecks({
 
   const handlePress = async (status: CheckStatus) => {
     if (!isSignedIn) return onRequireSignIn?.();
-    if (busy) return;
+    if (pending) return;
 
     const next = summary.my_status === status ? null : status;
     const previous = summary;
-    setBusy(true);
+    setPending(status);
 
-    // Clearing your check doesn't need you to be there
-    const location = next ? await getCheckLocation() : null;
-
-    // Optimistic update of the counts; the server's answer replaces it. Stock status is
-    // left alone: it depends on everyone's checks, so only the server can work it out.
+    // Optimistic update of the counts, shown straight away so the tap feels instant; the
+    // server's answer replaces it. Stock status is left alone: it depends on everyone's
+    // checks, so only the server can work it out.
     const counts = {
       validated: summary.validation_count,
       sold_out: summary.sold_out_count,
@@ -74,6 +72,9 @@ export default function PostChecks({
     });
 
     try {
+      // Clearing your check doesn't need you to be there, so only look up GPS when setting one.
+      // This waits for the GPS fix after the UI has already updated.
+      const location = next ? await getCheckLocation() : null;
       const result = await postApi.setCheck(postId, next, location);
       setSummary(result);
       onChange?.(result);
@@ -81,11 +82,23 @@ export default function PostChecks({
       setSummary(previous);
       Alert.alert("Error", error.response?.data?.error || "Could not update this post");
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
   const { stock_status, stock_updated_at, my_status } = summary;
+
+  const renderLabel = (status: CheckStatus, label: string) => {
+    const active = my_status === status;
+    return (
+      <>
+        {pending === status ? (
+          <ActivityIndicator size="small" color={active ? "#FFF8F0" : "#2A211D"} />
+        ) : null}
+        <Text style={[styles.text, active && styles.activeText]}>{label}</Text>
+      </>
+    );
+  };
 
   return (
     <View>
@@ -103,10 +116,9 @@ export default function PostChecks({
           style={[styles.button, my_status === "validated" && styles.validatedActive, isMine && styles.disabled]}
           accessibilityRole="button"
           accessibilityLabel={`Validate, ${summary.validation_count} validations`}
+          accessibilityState={{ busy: pending === "validated" }}
         >
-          <Text style={[styles.text, my_status === "validated" && styles.activeText]}>
-            ✓ Validate · {summary.validation_count}
-          </Text>
+          {renderLabel("validated", `✓ Validate · ${summary.validation_count}`)}
         </Pressable>
 
         <Pressable
@@ -114,10 +126,9 @@ export default function PostChecks({
           style={[styles.button, styles.soldOutButton, my_status === "sold_out" && styles.soldOutActive]}
           accessibilityRole="button"
           accessibilityLabel={`Sold out, ${summary.sold_out_count} reports`}
+          accessibilityState={{ busy: pending === "sold_out" }}
         >
-          <Text style={[styles.text, my_status === "sold_out" && styles.activeText]}>
-            ✕ Sold out{summary.sold_out_count ? ` · ${summary.sold_out_count}` : ""}
-          </Text>
+          {renderLabel("sold_out", `✕ Sold out${summary.sold_out_count ? ` · ${summary.sold_out_count}` : ""}`)}
         </Pressable>
 
         <Pressable
@@ -126,10 +137,9 @@ export default function PostChecks({
           style={[styles.button, styles.notRealButton, my_status === "not_real" && styles.notRealActive, isMine && styles.disabled]}
           accessibilityRole="button"
           accessibilityLabel={`Not real, ${summary.not_real_count} reports`}
+          accessibilityState={{ busy: pending === "not_real" }}
         >
-          <Text style={[styles.text, my_status === "not_real" && styles.activeText]}>
-            ⚑ Not real{summary.not_real_count ? ` · ${summary.not_real_count}` : ""}
-          </Text>
+          {renderLabel("not_real", `⚑ Not real${summary.not_real_count ? ` · ${summary.not_real_count}` : ""}`)}
         </Pressable>
 
         {trailing}
@@ -152,6 +162,9 @@ const styles = StyleSheet.create({
   validatedBadge: { backgroundColor: "#DCEAF7", color: "#2F5F8A" },
   row: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   button: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     borderWidth: 1.5,
     borderColor: "#71A5D3",
     borderRadius: 999,
