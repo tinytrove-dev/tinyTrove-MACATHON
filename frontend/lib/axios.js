@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// Set EXPO_PUBLIC_MY_IP_ADDRESS in frontEnd/.env to your computer's LAN IP
+// Set EXPO_PUBLIC_MY_IP_ADDRESS in frontend/.env to your computer's LAN IP
 // so a phone running Expo Go can reach the backend.
 const host = process.env.EXPO_PUBLIC_MY_IP_ADDRESS || "localhost";
 const baseURL = process.env.EXPO_PUBLIC_API_URL || `http://${host}:3000/api`;

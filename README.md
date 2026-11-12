@@ -21,7 +21,7 @@ Run the app (Frontend)
 1.	Navigate to the frontend folder:
 
     ```
-    cd frontEnd
+    cd frontend
 
 2.	Install dependencies:
 
