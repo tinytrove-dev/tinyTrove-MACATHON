@@ -88,14 +88,20 @@ export default function PostChecks({
 
   const { stock_status, stock_updated_at, my_status } = summary;
 
-  const renderLabel = (status: CheckStatus, label: string) => {
+  // The count and the loading spinner share a fixed-size slot, so tapping a button
+  // never changes its width and pushes the row onto another line
+  const renderLabel = (status: CheckStatus, label: string, count: number) => {
     const active = my_status === status;
     return (
       <>
-        {pending === status ? (
-          <ActivityIndicator size="small" color={active ? "#FFF8F0" : "#2A211D"} />
-        ) : null}
-        <Text style={[styles.text, active && styles.activeText]}>{label}</Text>
+        <Text style={[styles.text, active && styles.activeText]}>{label} ·</Text>
+        <View style={styles.countSlot}>
+          {pending === status ? (
+            <ActivityIndicator size="small" color={active ? "#FFF8F0" : "#2A211D"} />
+          ) : (
+            <Text style={[styles.text, styles.count, active && styles.activeText]}>{count}</Text>
+          )}
+        </View>
       </>
     );
   };
@@ -118,7 +124,7 @@ export default function PostChecks({
           accessibilityLabel={`Validate, ${summary.validation_count} validations`}
           accessibilityState={{ busy: pending === "validated" }}
         >
-          {renderLabel("validated", `✓ Validate · ${summary.validation_count}`)}
+          {renderLabel("validated", "✓ Validate", summary.validation_count)}
         </Pressable>
 
         <Pressable
@@ -128,7 +134,7 @@ export default function PostChecks({
           accessibilityLabel={`Sold out, ${summary.sold_out_count} reports`}
           accessibilityState={{ busy: pending === "sold_out" }}
         >
-          {renderLabel("sold_out", `✕ Sold out${summary.sold_out_count ? ` · ${summary.sold_out_count}` : ""}`)}
+          {renderLabel("sold_out", "✕ Sold out", summary.sold_out_count)}
         </Pressable>
 
         <Pressable
@@ -139,7 +145,7 @@ export default function PostChecks({
           accessibilityLabel={`Not real, ${summary.not_real_count} reports`}
           accessibilityState={{ busy: pending === "not_real" }}
         >
-          {renderLabel("not_real", `⚑ Not real${summary.not_real_count ? ` · ${summary.not_real_count}` : ""}`)}
+          {renderLabel("not_real", "⚑ Not real", summary.not_real_count)}
         </Pressable>
 
         {trailing}
@@ -164,7 +170,7 @@ const styles = StyleSheet.create({
   button: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     borderWidth: 1.5,
     borderColor: "#71A5D3",
     borderRadius: 999,
@@ -179,5 +185,8 @@ const styles = StyleSheet.create({
   notRealActive: { backgroundColor: "#8A6F5C" },
   disabled: { borderColor: "#C9B8A6" },
   text: { color: "#2A211D", fontSize: 14, fontWeight: "600" },
+  // Fits a 2-digit count or the spinner; tabular digits keep 1 and 8 the same width
+  countSlot: { minWidth: 20, height: 20, alignItems: "center", justifyContent: "center" },
+  count: { fontVariant: ["tabular-nums"] },
   activeText: { color: "#FFF8F0" },
 });

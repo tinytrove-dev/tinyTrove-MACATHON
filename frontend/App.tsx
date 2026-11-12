@@ -21,6 +21,7 @@ import StoreMap from './pages/StoreMap';
 import CommunityDetail from './pages/CommunityDetail';
 import TreasureDetail from './pages/TreasureDetail';
 import PostDetail from './pages/PostDetail';
+import PostPager from './pages/PostPager';
 import Button from './components/button';
 
 const tabs = [
@@ -87,6 +88,11 @@ export default function App() {
   const showsLogin = page === "login" || (!session && SIGNED_IN_PAGES.includes(page));
   const showBackButton = history.length > 0;
 
+  // The feed stays mounted (just hidden) while you're in something opened from it,
+  // so coming back keeps your scroll position and the posts already loaded
+  const feedInStack = page === "feed" || history.some((r) => r.page === "feed");
+  const showsFeed = page === "feed" && !showsLogin;
+
   const renderContent = () => {
     if (showsLogin) {
       return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
@@ -94,13 +100,7 @@ export default function App() {
 
     switch (page) {
       case "feed":
-        return (
-          <Feed
-            userId={userId}
-            onPostSelect={(post) => navigate("postDetail", post)}
-            onRequireSignIn={requireSignIn}
-          />
-        );
+        return null; // rendered separately below so it survives navigation
       case "map":
         return <Map locations={route.item || []} />;
       case "post":
@@ -134,7 +134,9 @@ export default function App() {
             userId={userId}
             onBack={goBack}
             onTreasureSelect={(treasure) => navigate("treasureDetail", treasure)}
-            onPostSelect={(post) => navigate("postDetail", post)}
+            onPostSelect={(post, posts) =>
+              navigate("postPager", { posts, index: Math.max(posts.indexOf(post), 0) })
+            }
             onRequireSignIn={requireSignIn}
           />
         );
@@ -151,6 +153,17 @@ export default function App() {
         return (
           <PostDetail
             post={route.item}
+            userId={userId}
+            onBack={goBack}
+            onOpenStore={(location) => navigate("map", [location])}
+            onRequireSignIn={requireSignIn}
+          />
+        );
+      case "postPager":
+        return (
+          <PostPager
+            posts={route.item.posts}
+            initialIndex={route.item.index}
             userId={userId}
             onBack={goBack}
             onOpenStore={(location) => navigate("map", [location])}
@@ -190,7 +203,16 @@ export default function App() {
       </View>
 
       <View style={styles.mainContent}>
-        {renderContent()}
+        {feedInStack && (
+          <View style={[styles.feedLayer, !showsFeed && styles.hidden]}>
+            <Feed
+              userId={userId}
+              onPostSelect={(post) => navigate("postDetail", post)}
+              onRequireSignIn={requireSignIn}
+            />
+          </View>
+        )}
+        {!showsFeed && renderContent()}
       </View>
 
       <View style={styles.footer}>
@@ -235,6 +257,12 @@ const styles = StyleSheet.create({
 
   mainContent: {
     flex: 1,
+  },
+  feedLayer: {
+    flex: 1,
+  },
+  hidden: {
+    display: "none",
   },
   footer: {
     flexDirection: "row",

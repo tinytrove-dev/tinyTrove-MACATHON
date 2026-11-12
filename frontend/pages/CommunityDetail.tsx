@@ -125,7 +125,8 @@ export default function CommunityDetail({
   const postImages = posts.map((item) => ({
     id: item.id,
     source: { uri: item.photo_url || "https://via.placeholder.com/100" },
-    onClick: () => onPostSelect?.(item),
+    // Pass the whole list so the post can be swiped through to its neighbours
+    onClick: () => onPostSelect?.(item, posts),
   }));
 
   // --- 3. HEADER COMPONENT (Wrapped in useMemo for touch reliability) ---
