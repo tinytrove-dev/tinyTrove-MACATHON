@@ -1,4 +1,4 @@
-MACATHON-2026
+# MACATHON-2026
 
 MAC Hackathon - Macathon 2026
 
@@ -10,69 +10,103 @@ Join niche communities based on your interests!! Whether it’s Minecraft, Pokem
 
 The app also includes a map + store feature, not for shopping, but for discovering real-world locations where collectibles have been spotted. It’s designed to support small, passionate communities and make finding rare or new drops easier.
 
-⸻
+---
 
-Expo React Native App
+## Table of Contents
+
+- [Getting Started](#getting-started)
+  - [Expo React Native App](#expo-react-native-app)
+  - [Docker Compose](#docker-compose)
+
+---
+
+## Getting Started
+
+### Expo React Native App
 
 A minimal React + Expo Go app is included in this repository.
 
 Run the app (Frontend)
 
-1.	Navigate to the frontend folder:
+1. Navigate to the frontend folder:
 
-    ```
-    cd frontEnd
+   ```sh
+   cd frontEnd
+   ```
 
-2.	Install dependencies:
+2. Install dependencies:
 
-    ```
-    npm install
+   ```sh
+   npm install
+   ```
 
-3.	Start Expo:
+3. Start Expo:
 
-      npm run start
+   ```sh
+   npm run start
+   ```
 
+4. Open in Expo Go on your device or emulator.
 
-4.	Open in Expo Go on your device or emulator.
-
-⸻
+---
 
 Backend
 
-1.	Navigate to the backend folder:
+1. Navigate to the backend folder:
 
-    ```
-    cd backend
+   ```sh
+   cd backend
+   ```
 
+2. Install dependencies:
 
-2.	Install dependencies:
+   ```sh
+   npm install
+   ```
 
-    ```
-    npm install
+3. Run the development server:
 
+   ```sh
+   npm run dev
+   ```
 
-3.	Run the development server:
-    ```
-npm run dev
-
-
-
-⸻
+---
 
 Database Setup (Supabase)
 
-1.	Install Supabase:
-    ```
-npm install @supabase/supabase-js
+1. Install Supabase:
 
+   ```sh
+   npm install @supabase/supabase-js
+   ```
 
-2.	Install required Expo dependencies:
-    ```
+2. Install required Expo dependencies:
+
+   ```sh
    npx expo install @supabase/supabase-js @react-native-async-storage/async-storage expo-secure-store expo-splash-screen
+   ```
 
+3. If an error occurs, try:
 
-3.	If an error occurs, try:
-    ```
-npm install expo
+   ```sh
+   npm install expo
+   ```
 
 Then run the install command again.
+
+---
+
+## Docker Compose
+
+1. Copy `.env.example` to `.env` and provide the secrets.
+2. Build and start the web app and API:
+
+   ```sh
+   docker compose up
+   ```
+
+3. Open the web app at <http://localhost:8080>. The backend is available at <http://localhost:3000>.
+
+Compose automatically loads `.env` from the project directory for build-argument interpolation, and the backend receives it at runtime. Supabase is hosted separately; the Compose stack does not start a local database. Expo embeds the frontend's `EXPO_PUBLIC_*` build args in the static bundle. Rebuild with `docker compose up --build` after changing them. These values are public in the browser bundle; use only the Supabase publishable key and a restricted Google Maps browser key, never a service-role key.
+
+---
