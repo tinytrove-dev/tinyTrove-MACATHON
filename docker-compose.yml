@@ -10,6 +10,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        EXPO_PUBLIC_API_URL: "${EXPO_PUBLIC_API_URL:-http://localhost:3000/api}"
+        EXPO_PUBLIC_SUPABASE_URL: "${EXPO_PUBLIC_SUPABASE_URL:?EXPO_PUBLIC_SUPABASE_URL is required}"
+        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}"
+        REACT_APP_GOOGLE_MAPS_API_KEY: "${REACT_APP_GOOGLE_MAPS_API_KEY:?REACT_APP_GOOGLE_MAPS_API_KEY is required}"
     depends_on:
       - backend
     ports:
