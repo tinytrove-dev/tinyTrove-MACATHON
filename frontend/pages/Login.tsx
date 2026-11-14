@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Image, Text, TextInput, Alert, StyleSheet, Pressable, ActivityIndicator,
-  ScrollView, KeyboardAvoidingView, Platform,
+  ScrollView, Keyboard,
 } from 'react-native';
 import { authApi } from '../lib/authApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useKeyboardScroll } from '../lib/useKeyboardScroll';
 
 type FieldKey = 'username' | 'displayName' | 'email' | 'password' | 'confirmPassword';
 type FieldErrors = Partial<Record<FieldKey, string>>;
@@ -76,6 +77,9 @@ export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     password: passwordRef,
     confirmPassword: confirmPasswordRef,
   };
+
+  // Keeps the focused field above the keyboard and lets the form scroll past it
+  const { scrollRef, onScroll, keyboardPadding, scrollToInput } = useKeyboardScroll();
 
   function clearError(key: FieldKey) {
     setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
@@ -151,100 +155,108 @@ export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Image
-          source={{ uri: "https://hhygpdtwzluzgvagrbqm.supabase.co/storage/v1/object/public/CommunityPictures/tinytrove.png" }}
-          style={{ width: 300, height: 300, alignSelf: 'center', marginBottom: 0, marginTop: 30, }}
-          resizeMode="contain"
-        />
-        <View style={styles.headerContainer}>
-          <Text style={styles.subtitle}>{isSignUp ? 'Join the community.' : 'Find your next obsession.'}</Text>
-        </View>
-
-        <View style={styles.inputContainer}>
-          {/* Only show these fields if the user is signing up */}
-          {isSignUp && (
-            <>
-              <Field
-                label="Username"
-                inputRef={usernameRef}
-                error={errors.username}
-                placeholder="e.g. John Bob"
-                value={username}
-                onChangeText={(text: string) => { setUsername(text); clearError('username'); }}
-                autoCapitalize="none"
-                editable={!loading}
-              />
-              <Field
-                label="Display name"
-                inputRef={displayNameRef}
-                error={errors.displayName}
-                placeholder="e.g. Sanrio Fan"
-                value={displayName}
-                onChangeText={(text: string) => { setDisplayName(text); clearError('displayName'); }}
-                editable={!loading}
-              />
-            </>
-          )}
-
-          <Field
-            label="Email"
-            inputRef={emailRef}
-            error={errors.email}
-            placeholder="name@example.com"
-            value={email}
-            onChangeText={(text: string) => { setEmail(text); clearError('email'); }}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!loading}
+      <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+        <ScrollView
+          ref={scrollRef}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.container, { paddingBottom: 32 + keyboardPadding }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Image
+            source={{ uri: "https://hhygpdtwzluzgvagrbqm.supabase.co/storage/v1/object/public/CommunityPictures/tinytrove.png" }}
+            style={{ width: 300, height: 300, alignSelf: 'center', marginBottom: 0, marginTop: 30, }}
+            resizeMode="contain"
           />
-          <Field
-            label="Password"
-            inputRef={passwordRef}
-            error={errors.password}
-            value={password}
-            onChangeText={(text: string) => { setPassword(text); clearError('password'); }}
-            secureTextEntry
-            editable={!loading}
-          />
-          {isSignUp && (
+          <View style={styles.headerContainer}>
+            <Text style={styles.subtitle}>{isSignUp ? 'Join the community.' : 'Find your next obsession.'}</Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            {/* Only show these fields if the user is signing up */}
+            {isSignUp && (
+              <>
+                <Field
+                  label="Username"
+                  inputRef={usernameRef}
+                  onFocus={() => scrollToInput(usernameRef)}
+                  error={errors.username}
+                  placeholder="e.g. John Bob"
+                  value={username}
+                  onChangeText={(text: string) => { setUsername(text); clearError('username'); }}
+                  autoCapitalize="none"
+                  editable={!loading}
+                />
+                <Field
+                  label="Display name"
+                  inputRef={displayNameRef}
+                  onFocus={() => scrollToInput(displayNameRef)}
+                  error={errors.displayName}
+                  placeholder="e.g. Sanrio Fan"
+                  value={displayName}
+                  onChangeText={(text: string) => { setDisplayName(text); clearError('displayName'); }}
+                  editable={!loading}
+                />
+              </>
+            )}
+
             <Field
-              label="Confirm password"
-              inputRef={confirmPasswordRef}
-              error={errors.confirmPassword}
-              value={confirmPassword}
-              onChangeText={(text: string) => { setConfirmPassword(text); clearError('confirmPassword'); }}
+              label="Email"
+              inputRef={emailRef}
+              onFocus={() => scrollToInput(emailRef)}
+              error={errors.email}
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={(text: string) => { setEmail(text); clearError('email'); }}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
+            <Field
+              label="Password"
+              inputRef={passwordRef}
+              onFocus={() => scrollToInput(passwordRef)}
+              error={errors.password}
+              value={password}
+              onChangeText={(text: string) => { setPassword(text); clearError('password'); }}
               secureTextEntry
               editable={!loading}
             />
-          )}
-        </View>
+            {isSignUp && (
+              <Field
+                label="Confirm password"
+                inputRef={confirmPasswordRef}
+                onFocus={() => scrollToInput(confirmPasswordRef)}
+                error={errors.confirmPassword}
+                value={confirmPassword}
+                onChangeText={(text: string) => { setConfirmPassword(text); clearError('confirmPassword'); }}
+                secureTextEntry
+                editable={!loading}
+              />
+            )}
+          </View>
 
-        <View style={styles.buttonContainer}>
-          <Pressable
-            style={styles.primaryButton}
-            onPress={isSignUp ? signUpWithEmail : signInWithEmail}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>}
-          </Pressable>
+          <View style={styles.buttonContainer}>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={isSignUp ? signUpWithEmail : signInWithEmail}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>}
+            </Pressable>
 
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={() => { setIsSignUp(!isSignUp); setErrors({}); }} // Toggles the form mode
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() => { setIsSignUp(!isSignUp); setErrors({}); }} // Toggles the form mode
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </Pressable>
     </SafeAreaView>
   );
 }
