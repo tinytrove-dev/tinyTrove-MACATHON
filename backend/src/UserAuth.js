@@ -16,3 +16,18 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+const serverOptions = {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+};
+
+// Fresh client for sign-in, so the session stays with that one request and never
+// ends up on the shared client
+export const createAuthClient = () => createClient(supabaseUrl, supabaseKey, serverOptions);
+
+// Client that acts as the user who owns accessToken, so storage and database rules apply to them
+export const supabaseForToken = (accessToken) =>
+  createClient(supabaseUrl, supabaseKey, {
+    ...serverOptions,
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });

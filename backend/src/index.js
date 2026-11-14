@@ -5,7 +5,8 @@ import cors from "cors";
 
 const app = express();
 
-app.use(express.json());
+// Raised limit so base64 image uploads fit
+app.use(express.json({ limit: "15mb" }));
 app.use(cors());
 
 app.use("/api/user-auth", userAuthRoutes);

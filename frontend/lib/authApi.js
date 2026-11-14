@@ -1,4 +1,4 @@
-import { axiosInstance } from "./axios";
+import { axiosInstance, setAccessToken } from "./axios";
 
 export const authApi = {
   signIn: async (email, password) => {
@@ -6,6 +6,7 @@ export const authApi = {
       email,
       password,
     });
+    setAccessToken(response.data.session?.access_token);
     return response.data;
   },
 
@@ -16,11 +17,19 @@ export const authApi = {
       username,
       displayName,
     });
+    setAccessToken(response.data.session?.access_token);
     return response.data;
   },
 
   signOut: async () => {
     const response = await axiosInstance.post("/user-auth/sign-out");
+    setAccessToken(null);
+    return response.data;
+  },
+
+  // Saves the picture the backend just uploaded as the signed-in user's profile picture
+  updateAvatar: async (avatarUrl) => {
+    const response = await axiosInstance.put("/user-auth/avatar", { avatar_url: avatarUrl });
     return response.data;
   },
 
