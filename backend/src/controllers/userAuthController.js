@@ -1,10 +1,10 @@
-import { supabase } from "../UserAuth.js";
+import { supabase, createAuthClient } from "../UserAuth.js";
 
 export const signIn = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await createAuthClient().auth.signInWithPassword({
       email,
       password,
     });

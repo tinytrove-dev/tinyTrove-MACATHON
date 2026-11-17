@@ -10,15 +10,15 @@ import {
   FlatList,
 } from "react-native";
 import { authApi } from "../lib/authApi";
+import { postApi } from "../lib/postApi";
 import * as ImagePicker from "expo-image-picker";
-import { supabase } from "../lib/supabase";
 
-export function ProfileScreen({ 
-  userId, 
-  onLogout, 
-  onCommunitySelect, 
-  onPostSelect, 
-  onCreateCommunity 
+export function ProfileScreen({
+  userId,
+  onLogout,
+  onCommunitySelect,
+  onPostSelect,
+  onCreateCommunity
 }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
@@ -27,9 +27,6 @@ export function ProfileScreen({
   const [activeTab, setActiveTab] = useState("posts");
   const [refreshKey, setRefreshKey] = useState(0);
   const [uploading, setUploading] = useState(false);
-
-  const folderName = userId;
-  const bucketName = "ProfilePictures";
 
   useEffect(() => {
     if (userId) {
@@ -77,33 +74,23 @@ export function ProfileScreen({
       mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.8,
+      base64: true, // the backend uploads the image, so the app sends its data
     });
 
     if (result.canceled) return;
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
 
     try {
       setUploading(true);
-      const response = await fetch(uri);
-      const arrayBuffer = await response.arrayBuffer();
-      const filePath = `${folderName}/${Date.now()}.jpg`;
-
-      const { error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, arrayBuffer, { contentType: "image/jpeg" });
-
-      if (error) throw error;
-
-      const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-      
-      await supabase
-        .from("profiles")
-        .update({ avatar_url: data.publicUrl })
-        .eq("id", userId);
-
+      // Upload through the backend as the signed-in user, then save the link to the profile
+      const photoUrl = await postApi.uploadImage("ProfilePictures", asset.base64);
+      await authApi.updateAvatar(photoUrl);
       setRefreshKey((prev) => prev + 1);
     } catch (err) {
-      Alert.alert("Upload failed", "Could not update profile picture.");
+      Alert.alert(
+        "Upload failed",
+        (err as any).response?.data?.error || "Could not update profile picture."
+      );
     } finally {
       setUploading(false);
     }
@@ -129,7 +116,7 @@ export function ProfileScreen({
           <View style={styles.profileDetails}>
             <Text style={styles.displayName}>{profile?.display_name || "Collector"}</Text>
             <Text style={styles.username}>@{profile?.username || "username"}</Text>
-            
+
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
                 <Text style={styles.statNumber}>{posts.length}</Text>
@@ -155,13 +142,13 @@ export function ProfileScreen({
 
       {/* --- TABS --- */}
       <View style={styles.tabRow}>
-        <Pressable 
+        <Pressable
           style={[styles.tabButton, activeTab === "posts" && styles.activeTabButton]}
           onPress={() => setActiveTab("posts")}
         >
           <Text style={styles.tabText}>Posts</Text>
         </Pressable>
-        <Pressable 
+        <Pressable
           style={[styles.tabButton, activeTab === "communities" && styles.activeTabButton]}
           onPress={() => setActiveTab("communities")}
         >
@@ -199,9 +186,9 @@ export function ProfileScreen({
             renderItem={({ item }) => (
               <Pressable style={styles.card} onPress={() => onCommunitySelect?.(item)}>
                 <View style={styles.iconCircle}>
-                  <Image 
-                    source={{ uri: item.cover_image_url || item.photo_url }} 
-                    style={styles.cardImage} 
+                  <Image
+                    source={{ uri: item.cover_image_url || item.photo_url }}
+                    style={styles.cardImage}
                   />
                 </View>
                 {/* Optimized cardText container */}

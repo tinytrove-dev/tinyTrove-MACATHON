@@ -28,7 +28,7 @@ export default function PostDetail({ post, onBack, onOpenStore }) {
         location,
         photo_url,
         stores ( name, address ),
-        profiles ( username, display_name, avatar_url ),
+        profiles!user_id ( username, display_name, avatar_url ),
         post_tags (
           treasure_tag (
             name

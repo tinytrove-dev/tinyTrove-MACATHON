@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import LocationPicker from "../components/LocationPicker";
 import TagPicker, { TagProps } from "../components/TagPicker";
 import { postApi } from "../lib/postApi";
 import ImageUploader from "../components/ImageUpload";
 import { supabase } from "../lib/supabase";
+import { useKeyboardScroll } from "../lib/useKeyboardScroll";
 
 // If using TypeScript (.tsx), use: export default function Post({ userId }: { userId: string })
 export default function Post({ userId, setActivePage }) {
@@ -26,6 +28,9 @@ export default function Post({ userId, setActivePage }) {
   const [image, setImage] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  const descriptionRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const { scrollRef, onScroll, keyboardPadding, scrollToInput } = useKeyboardScroll();
 
   const handleUploadComplete = (url: string) => {
     console.log("url", url);
@@ -97,7 +102,15 @@ export default function Post({ userId, setActivePage }) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+    <ScrollView
+      ref={scrollRef}
+      style={styles.container}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      contentContainerStyle={{ paddingBottom: keyboardPadding }}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.content}>
         <Text style={styles.title}>New Post</Text>
 
@@ -109,6 +122,8 @@ export default function Post({ userId, setActivePage }) {
 
         <Text style={styles.label}>Description</Text>
         <TextInput
+          ref={descriptionRef}
+          onFocus={() => scrollToInput(descriptionRef)}
           style={[styles.input, styles.textArea]}
           placeholder="What's your collection?"
           placeholderTextColor="#555"
@@ -144,6 +159,7 @@ export default function Post({ userId, setActivePage }) {
         </Pressable>
       </View>
     </ScrollView>
+    </Pressable>
   );
 }
 
