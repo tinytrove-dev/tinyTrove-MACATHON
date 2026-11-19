@@ -23,6 +23,7 @@ import TreasureDetail from './pages/TreasureDetail';
 import PostDetail from './pages/PostDetail';
 import PostPager from './pages/PostPager';
 import Button from './components/button';
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const tabs = [
   { key: "feed", label: "Feed" },
@@ -181,7 +182,7 @@ export default function App() {
     .find((p) => tabs.some((tab) => tab.key === p));
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={["bottom"]} style={styles.container}>
       <StatusBar style="light" />
       <View style={styles.header}>
         {showBackButton && (
@@ -228,7 +229,7 @@ export default function App() {
           </Pressable>
         ))}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     paddingVertical: 14,
-    paddingBottom: 35,
+    paddingBottom: 14,
     backgroundColor: "#211A19",
     borderTopWidth: 1,
     borderTopColor: "#332a29",

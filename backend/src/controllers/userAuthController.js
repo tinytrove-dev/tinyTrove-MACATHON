@@ -124,31 +124,6 @@ export const getProfile = async (req, res) => {
   }
 };
 
-export const updateAvatar = async (req, res) => {
-  try {
-    const { avatar_url } = req.body;
-
-    if (!avatar_url) {
-      return res.status(400).json({ error: "avatar_url is required" });
-    }
-
-    const { data, error } = await req.supabase
-      .from("profiles")
-      .update({ avatar_url })
-      .eq("id", req.user.id)
-      .select()
-      .single();
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
 export const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;

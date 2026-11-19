@@ -1,11 +1,16 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, Alert, ScrollView, ActivityIndicator } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, StyleSheet, TextInput, Pressable, Alert, ScrollView, ActivityIndicator, Keyboard } from "react-native";
 import { postApi } from "../lib/postApi";
+import { useKeyboardScroll } from "../lib/useKeyboardScroll";
 
 export default function CreateCommunity({ userId, onGoBack }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const nameRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const descriptionRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const { scrollRef, onScroll, keyboardPadding, scrollToInput } = useKeyboardScroll();
 
   const handleCreate = async () => {
     if (!name) return Alert.alert("Error", "Name is required");
@@ -22,19 +27,44 @@ export default function CreateCommunity({ userId, onGoBack }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>New Community</Text>
-      <TextInput style={[styles.input]} placeholder=" Name of Community" value={name} onChangeText={setName} />
-      <TextInput style={[styles.input, { height: 100 }]} placeholder="Description" multiline value={description} placeholderTextColor="#000000" onChangeText={setDescription} />
-      
-      <Pressable style={styles.button} onPress={handleCreate} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create</Text>}
-      </Pressable>
-      
-      <Pressable onPress={onGoBack} style={{ marginTop: 20 }}>
-        <Text style={{ textAlign: 'center', color: '#666' }}>Cancel</Text>
-      </Pressable>
-    </ScrollView>
+    <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 20 + keyboardPadding }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>New Community</Text>
+        <TextInput
+          ref={nameRef}
+          onFocus={() => scrollToInput(nameRef)}
+          style={[styles.input]}
+          placeholder=" Name of Community"
+          value={name}
+          onChangeText={setName}
+        />
+        <TextInput
+          ref={descriptionRef}
+          onFocus={() => scrollToInput(descriptionRef)}
+          style={[styles.input, { height: 100 }]}
+          placeholder="Description"
+          multiline
+          value={description}
+          placeholderTextColor="#000000"
+          onChangeText={setDescription}
+        />
+
+        <Pressable style={styles.button} onPress={handleCreate} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create</Text>}
+        </Pressable>
+
+        <Pressable onPress={onGoBack} style={{ marginTop: 20 }}>
+          <Text style={{ textAlign: 'center', color: '#666' }}>Cancel</Text>
+        </Pressable>
+      </ScrollView>
+    </Pressable>
   );
 }
 

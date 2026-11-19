@@ -69,4 +69,10 @@ export const postApi = {
     const response = await axiosInstance.post("/post/upload-image", { bucket, base64 });
     return response.data.url;
   },
+  // bucket: "Posts" | "ProfilePictures". base64 is the image's base64 data.
+  // The backend uploads it as the signed-in user and returns the image's public URL.
+  uploadImage: async (bucket, base64) => {
+    const response = await axiosInstance.post("/post/upload-image", { bucket, base64 });
+    return response.data.url;
+  },
 };

@@ -1,5 +1,6 @@
 import express from "express";
-import { signIn, signUp, signOut, refreshSession, getProfile, updateAvatar, getUserPosts, getUserCommunities, joinCommunity,  leaveCommunity, isMember} from "../controllers/userAuthController.js";
+import { signIn, signUp, signOut, refreshSession, getProfile, getUserPosts, getUserCommunities, joinCommunity,  leaveCommunity, isMember} from "../controllers/userAuthController.js";
+import { updateAvatar } from "../controllers/profileController.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = express.Router();

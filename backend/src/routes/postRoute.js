@@ -1,5 +1,6 @@
 import express from "express";
-import { createPost, createCommunity, createTag, uploadImage } from "../controllers/postController.js";
+import { createPost, createCommunity, createTag } from "../controllers/postController.js";
+import { uploadImage } from "../controllers/uploadController.js";
 import { setCheck, clearCheck, addComment } from "../controllers/engagementController.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
