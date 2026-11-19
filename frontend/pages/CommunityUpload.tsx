@@ -16,7 +16,7 @@ export default function CreateCommunity({ userId, onGoBack }) {
     if (!name) return Alert.alert("Error", "Name is required");
     setLoading(true);
     try {
-      await postApi.createCommunity(userId, name, description);
+      await postApi.createCommunity(name, description);
       Alert.alert("Success", "Trove Created!");
       onGoBack(); // Go back to profile
     } catch (error) {

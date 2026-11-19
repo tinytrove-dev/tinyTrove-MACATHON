@@ -1,13 +1,10 @@
-import { authApi } from "./authApi";
 import { axiosInstance } from "./axios";
 
+// The signed-in user is taken from the session token, so no userId is sent.
 export const postApi = {
-  // 1. Add userId as the FIRST argument here
-  createPost: async (userId, image, description, location, tags) => {
-    //console.log("postapi", tags);
+  createPost: async (image, description, location, tags) => {
     try {
       const response = await axiosInstance.post("/post/create-post", {
-        userId, // 2. Add userId to the payload being sent
         image,
         description,
         location,
@@ -16,12 +13,11 @@ export const postApi = {
       return response.data;
     } catch (err) {
       console.log("Create Post Error: ", err);
-      // 3. CRITICAL: You must throw the error so your Post.js file knows it failed!
+      // Re-throw so the Post page knows it failed
       throw err;
     }
   },
   createCommunity: async (
-    userId,
     name,
     description,
     photoUrl,
@@ -30,9 +26,7 @@ export const postApi = {
     themeColor
   ) => {
     try {
-      // Make sure this URL matches exactly what is in your Express backend!
       const response = await axiosInstance.post("/post/create-community", {
-        userId: userId,
         name: name,
         description: description,
         photo_url: photoUrl,
@@ -48,19 +42,32 @@ export const postApi = {
       throw err;
     }
   },
-  createTag: async (userId, name, description, photoUrl, communityId) => {
-    try {
-      const response = await axiosInstance.post("/post/create-tag", {
-        userId,
-        name,
-        description,
-        photo_url: photoUrl,
-        communityId, // <--- This must be here!
-      });
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+  createTag: async (name, description, photoUrl, communityId) => {
+    const response = await axiosInstance.post("/post/create-tag", {
+      name,
+      description,
+      photo_url: photoUrl,
+      communityId,
+    });
+    return response.data;
+  },
+  // status: "validated" | "sold_out" | "not_real", or null to clear your check.
+  // location: { lat, lng, accuracy } - needed when the post's store location is known.
+  // Returns { validation_count, sold_out_count, not_real_count, stock_status, stock_updated_at, my_status }
+  setCheck: async (postId, status, location) => {
+    const response = status
+      ? await axiosInstance.put(`/post/${postId}/check`, { status, ...location })
+      : await axiosInstance.delete(`/post/${postId}/check`);
+    return response.data;
+  },
+  addComment: async (postId, body) => {
+    const response = await axiosInstance.post(`/post/${postId}/comments`, { body });
+    return response.data;
+  },
+  // bucket: "Posts" | "ProfilePictures". Returns the image's public URL.
+  uploadImage: async (bucket, base64) => {
+    const response = await axiosInstance.post("/post/upload-image", { bucket, base64 });
+    return response.data.url;
   },
   // bucket: "Posts" | "ProfilePictures". base64 is the image's base64 data.
   // The backend uploads it as the signed-in user and returns the image's public URL.

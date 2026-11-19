@@ -9,7 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from "react-native";
-import { supabase } from "../lib/supabase";
+import { contentApi } from "../lib/contentApi";
 
 const filterOptions = [
   { key: "all", label: "All" },
@@ -30,64 +30,12 @@ export function Search({ onStoreSelect, onCommunitySelect, onTreasureSelect }) {
 
   const fetchResults = async () => {
     setLoading(true);
-    const sanitizedQuery = searchQuery.trim();
-    const searchPattern = `%${sanitizedQuery.replace(/%/g, "\\%" )}%`;
-
     try {
-      const communityQuery = supabase
-        .from("communities")
-        .select("id,name,description,photo_url,banner_url,theme_color,number_of_members");
-      const storeQuery = supabase
-        .from("stores")
-        .select("id,name,address");
-      const treasureQuery = supabase
-        .from("treasure_tag")
-        .select("id,name,descriptor,photo");
-      const communityTreasuresQuery = supabase
-        .from("community_treasures")
-        .select("community_id,treasure_id");
-
-      if (sanitizedQuery) {
-        communityQuery.or(
-          `name.ilike.${searchPattern},description.ilike.${searchPattern}`
-        );
-        storeQuery.or(
-          `name.ilike.${searchPattern},address.ilike.${searchPattern}`
-        );
-        treasureQuery.ilike("name", searchPattern);
-      }
-
-      const [
-        { data: communityData, error: communityError },
-        { data: storeData, error: storeError },
-        { data: treasureData, error: treasureError },
-        { data: communityTreasuresData, error: communityTreasuresError },
-      ] = await Promise.all([
-        communityQuery,
-        storeQuery,
-        treasureQuery,
-        communityTreasuresQuery,
-      ]);
-
-      if (communityError || storeError || treasureError || communityTreasuresError) {
-        console.error("Supabase search error:", {
-          communityError,
-          storeError,
-          treasureError,
-          communityTreasuresError,
-        });
-        setResults([]);
-        return;
-      }
-
-      const treasureCountByCommunity = (communityTreasuresData || []).reduce(
-        (acc, row) => {
-          const id = row.community_id;
-          acc[id] = (acc[id] || 0) + 1;
-          return acc;
-        },
-        {}
-      );
+      const {
+        communities: communityData,
+        stores: storeData,
+        treasures: treasureData,
+      } = await contentApi.search(searchQuery.trim());
 
       //TODO: add function that gets community name of related character
 
@@ -100,7 +48,7 @@ export function Search({ onStoreSelect, onCommunitySelect, onTreasureSelect }) {
         banner_url: community.banner_url,
         theme_color: community.theme_color || "#71A5D3",
         number_of_members: community.number_of_members || 0,
-        treasures: treasureCountByCommunity[community.id] || 0,
+        treasures: community.treasures || 0,
       }));
 
       const storeResults = (storeData || []).map((store) => ({

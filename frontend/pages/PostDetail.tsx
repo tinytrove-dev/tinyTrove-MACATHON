@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Pressable,} from "react-native";
-import { supabase } from "../lib/supabase";
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { contentApi } from "../lib/contentApi";
+import { postApi } from "../lib/postApi";
+import PostChecks from "../components/PostChecks";
+import StockBanner from "../components/StockBanner";
 
-export default function PostDetail({ post, onBack, onOpenStore }) {
-  const [postData, setPostData] = useState(null);
+export default function PostDetail({ post, userId, onBack, onOpenStore, onRequireSignIn }) {
+  const [postData, setPostData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
 
   useEffect(() => {
     if (post?.id) {
@@ -20,33 +26,36 @@ export default function PostDetail({ post, onBack, onOpenStore }) {
     setLoading(true);
     setError(null);
 
-    const { data, error } = await supabase
-      .from("posts")
-      .select(`
-        id,
-        caption,
-        location,
-        photo_url,
-        stores ( name, address ),
-        profiles!user_id ( username, display_name, avatar_url ),
-        post_tags (
-          treasure_tag (
-            name
-          )
-        )
-      `)
-      .eq("id", post.id)
-      .single();
-
-    if (error) {
-      console.error("Post detail fetch error", error);
-      setError(error.message);
+    try {
+      const [postResult, commentsResult] = await Promise.all([
+        contentApi.getPost(post.id),
+        contentApi.getComments(post.id),
+      ]);
+      setPostData(postResult);
+      setComments(commentsResult);
+    } catch (err: any) {
+      console.error("Post detail fetch error", err);
+      setError(err.response?.data?.error || err.message);
       setPostData(null);
-    } else {
-      setPostData(data);
     }
 
     setLoading(false);
+  };
+
+  const submitComment = async () => {
+    const body = commentText.trim();
+    if (!body || sendingComment) return;
+
+    setSendingComment(true);
+    try {
+      const newComment = await postApi.addComment(post.id, body);
+      setComments((prev) => [...prev, newComment]);
+      setCommentText("");
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.error || "Could not post comment");
+    } finally {
+      setSendingComment(false);
+    }
   };
 
   if (loading) {
@@ -98,12 +107,19 @@ export default function PostDetail({ post, onBack, onOpenStore }) {
     : null;
 
   return (
-    <View style={styles.page}>
+    <KeyboardAvoidingView
+      style={styles.page}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={100}
+    >
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        <StockBanner summary={postData} />
+
         <View style={styles.userRow}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
@@ -168,8 +184,73 @@ export default function PostDetail({ post, onBack, onOpenStore }) {
             </>
           )}
         </View>
+
+        <View style={styles.actionsRow}>
+          <PostChecks
+            postId={postData.id}
+            summary={postData}
+            isSignedIn={!!userId}
+            isMine={postData.is_mine}
+            onRequireSignIn={onRequireSignIn}
+            onChange={(summary) => setPostData((prev) => ({ ...prev, ...summary }))}
+          />
+          <Text style={styles.validateHint}>
+            {postData.is_mine
+              ? "Gone back and it's gone? Mark it sold out so nobody makes a wasted trip."
+              : "Been there? Validate it's still in stock, or report it sold out."}
+          </Text>
+        </View>
+
+        {/* --- COMMENTS --- */}
+        <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
+
+        {comments.length === 0 && (
+          <Text style={styles.noComments}>No comments yet.</Text>
+        )}
+
+        {comments.map((comment) => (
+          <View key={comment.id} style={styles.comment}>
+            {comment.profiles?.avatar_url ? (
+              <Image source={{ uri: comment.profiles.avatar_url }} style={styles.commentAvatar} />
+            ) : (
+              <View style={[styles.commentAvatar, { backgroundColor: "#f8d09e" }]} />
+            )}
+            <View style={styles.commentBody}>
+              <Text style={styles.commentAuthor}>
+                {comment.profiles?.display_name || comment.profiles?.username || "Collector"}
+              </Text>
+              <Text style={styles.commentText}>{comment.body}</Text>
+            </View>
+          </View>
+        ))}
+
+        {userId ? (
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Add a comment..."
+              placeholderTextColor="#8C7A6B"
+              value={commentText}
+              onChangeText={setCommentText}
+              maxLength={500}
+              multiline
+              editable={!sendingComment}
+            />
+            <Pressable
+              style={[styles.sendButton, (!commentText.trim() || sendingComment) && styles.sendDisabled]}
+              onPress={submitComment}
+              disabled={!commentText.trim() || sendingComment}
+            >
+              <Text style={styles.sendText}>{sendingComment ? "..." : "Post"}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={onRequireSignIn}>
+            <Text style={styles.signInToComment}>Sign in to comment ›</Text>
+          </Pressable>
+        )}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -327,5 +408,95 @@ const styles = StyleSheet.create({
     color: "#B00020",
     textAlign: "center",
     paddingHorizontal: 20,
+  },
+  actionsRow: {
+    marginTop: 18,
+  },
+  validateHint: {
+    fontSize: 13,
+    color: "#5A4A40",
+    marginTop: 8,
+  },
+  commentsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#2A211D",
+    marginTop: 24,
+    marginBottom: 10,
+  },
+  noComments: {
+    fontSize: 14,
+    color: "#5A4A40",
+    marginBottom: 10,
+  },
+  comment: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  commentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#ddd",
+  },
+  commentBody: {
+    flex: 1,
+    marginLeft: 10,
+    backgroundColor: "#FFF8F0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  commentAuthor: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2A211D",
+  },
+  commentText: {
+    fontSize: 15,
+    color: "#1F1A17",
+    marginTop: 2,
+    lineHeight: 21,
+  },
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    marginTop: 6,
+  },
+  commentInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 120,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#8C5A3C",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 15,
+    color: "#1F1A17",
+  },
+  sendButton: {
+    backgroundColor: "#71A5D3",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    height: 40,
+    justifyContent: "center",
+  },
+  sendDisabled: {
+    opacity: 0.5,
+  },
+  sendText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  signInToComment: {
+    color: "#71A5D3",
+    fontWeight: "600",
+    fontSize: 15,
+    marginTop: 6,
   },
 });

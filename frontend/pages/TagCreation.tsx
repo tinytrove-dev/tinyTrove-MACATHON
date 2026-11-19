@@ -36,8 +36,8 @@ export default function CreateTag({ userId, communityId, onGoBack }) {
     try {
       // 3. Passing the 5th argument: communityId
       // This allows the backend to link this tag to the specific community
-      await postApi.createTag(userId, name, description, photoUrl, communityId);
-
+      await postApi.createTag(name, description, photoUrl, communityId);
+      
       Alert.alert("Success", "Tag Created!");
       onGoBack();
     } catch (error) {

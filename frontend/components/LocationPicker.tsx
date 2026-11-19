@@ -8,7 +8,7 @@ import {
   FlatList,
   StyleSheet,
 } from "react-native";
-import { supabase } from "../lib/supabase";
+import { contentApi } from "../lib/contentApi";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface LocationPickerProps {
@@ -29,50 +29,18 @@ export default function LocationPicker({
   const [query, setQuery] = useState("");
   const [stores, setStores] = useState<LocationProps[]>([]);
 
-  // Fetch stores from Supabase
+  // Fetch stores from the backend
   useEffect(() => {
     async function fetchStores() {
-      const { data, error } = await supabase
-        .from("stores")
-        .select("id,name,address");
-
-      if (error) {
+      try {
+        setStores(await contentApi.getStores());
+      } catch (error) {
         console.error("Error fetching stores:", error);
-        return;
       }
-
-      setStores(data || []);
     }
 
     fetchStores();
   }, []);
-
-  async function geocodeAddress(address) {
-    const response = await fetch(
-      "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-        encodeURIComponent(address) +
-        "&key=AIzaSyBhCrEsAMyzkWJMzVmMQKg5yhKidiIBleE"
-    );
-    const data = await response.json();
-    if (data.results && data.results[0]) {
-      return data.results[0].geometry.location;
-    }
-    return null;
-  }
-
-  async function getAddressFromCoords(lat: number, lng: number) {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=YOUR_API_KEY`
-    );
-
-    const data = await response.json();
-
-    if (data.results && data.results.length > 0) {
-      return data.results[0].formatted_address;
-    }
-
-    return null;
-  }
 
   // Filter results
   const filtered = stores.filter((item) =>
@@ -114,54 +82,16 @@ export default function LocationPicker({
                 style={styles.addButton}
                 onPress={async () => {
                 try {
-                  console.log("pressed");
-                  // 1. Geocode query → lat/lng
-                  const geo = await geocodeAddress(query);
+                  // 1. Backend geocodes the name and saves the store
+                  const inserted = await contentApi.createStore(query);
 
-                  if (!geo) {
-                    throw new Error("Could not geocode location");
-                  }
-
-                  console.log(geo);
-                  const lat = geo.lat;
-                  const lng = geo.lng;
-
-                  // 2. Reverse geocode → formatted address
-                  const response = await fetch(
-                    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=AIzaSyBhCrEsAMyzkWJMzVmMQKg5yhKidiIBleE`
-                  );
-
-                  const data = await response.json();
-
-                  const formattedAddress =
-                    data.results?.[0]?.formatted_address || query;
-
-                  console.log(formattedAddress);
-
-                  // 3. Insert into Supabase
-                  const { data: inserted, error } = await supabase
-                    .from("stores")
-                    .insert([
-                      {
-                        name: query.replace(/\b\w/g, c => c.toUpperCase()),
-                        address: formattedAddress,
-                      },
-                    ])
-                    .select()
-                    .single();
-
-                  if (error) {
-                    console.error("Insert error:", error);
-                    return;
-                  }
-
-                  // 4. Update UI
+                  // 2. Update UI
                   chooseLocation(inserted.name);
                   setLocation(inserted.name);
                   setModalVisible(false);
                   setQuery("");
 
-                  // 5. Optional: update local state instantly
+                  // 3. Update local state instantly
                   setStores((prev) => [...prev, inserted]);
                 } catch (err) {
                   console.error("Failed to add location:", err);

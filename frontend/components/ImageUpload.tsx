@@ -14,13 +14,12 @@ import * as ImagePicker from "expo-image-picker";
 import { postApi } from "../lib/postApi";
 
 type Props = {
-  folderName: string;
+  // "Posts" | "ProfilePictures"; files are stored under the signed-in user's folder
   bucketName: string;
   onUploadComplete?: (url: string) => void;
 };
 
 const ImageUploader: React.FC<Props> = ({
-  folderName,
   bucketName,
   onUploadComplete,
 }) => {

@@ -1,6 +1,8 @@
 import express from "express";
 import userAuthRoutes from "./routes/userAuthRoute.js";
 import postRoutes from "./routes/postRoute.js";
+import contentRoutes from "./routes/contentRoute.js";
+import feedRoutes from "./routes/feedRoute.js";
 import cors from "cors";
 
 const app = express();
@@ -11,7 +13,11 @@ app.use(cors());
 
 app.use("/api/user-auth", userAuthRoutes);
 app.use("/api/post", postRoutes);
+app.use("/api/content", contentRoutes);
+app.use("/api/feed", feedRoutes);
 
-const server = app.listen(3000, () =>
-  console.log("Server running at localhost:3000")
+const port = process.env.PORT || 3000;
+
+const server = app.listen(port, () =>
+  console.log(`Server running at localhost:${port}`)
 );

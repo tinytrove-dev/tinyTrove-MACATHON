@@ -1,4 +1,4 @@
-import { supabase, createAuthClient } from "../UserAuth.js";
+import { supabase, createAuthClient, supabaseForToken } from "../UserAuth.js";
 
 export const signIn = async (req, res) => {
   try {
@@ -23,8 +23,12 @@ export const signUp = async (req, res) => {
   try {
     const { email, password, username, displayName } = req.body;
 
+    if (!email || !password || !username) {
+      return res.status(400).json({ error: "Email, password and username are required" });
+    }
+
     // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await createAuthClient().auth.signUp({
       email,
       password,
     });
@@ -33,9 +37,14 @@ export const signUp = async (req, res) => {
       return res.status(400).json({ error: authError.message });
     }
 
-    // Create profile
+    // Create profile (as the new user when Supabase returned a session,
+    // i.e. email confirmation is off)
     if (authData.user) {
-      const { error: profileError } = await supabase.from("profiles").insert([
+      const db = authData.session
+        ? supabaseForToken(authData.session.access_token)
+        : supabase;
+
+      const { error: profileError } = await db.from("profiles").insert([
         {
           id: authData.user.id,
           username: username.toLowerCase(),
@@ -49,7 +58,31 @@ export const signUp = async (req, res) => {
       }
     }
 
-    res.json({ user: authData.user, message: "Sign up successful" });
+    res.json({
+      user: authData.user,
+      session: authData.session,
+      message: "Sign up successful",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const refreshSession = async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({ error: "Refresh token is required" });
+    }
+
+    const { data, error } = await createAuthClient().auth.refreshSession({ refresh_token });
+
+    if (error || !data.session) {
+      return res.status(401).json({ error: error?.message || "Could not refresh session" });
+    }
+
+    res.json({ user: data.user, session: data.session });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -57,7 +90,8 @@ export const signUp = async (req, res) => {
 
 export const signOut = async (req, res) => {
   try {
-    const { error } = await supabase.auth.signOut();
+    // Revokes only this device's session
+    const { error } = await supabase.auth.admin.signOut(req.token, "local");
 
     if (error) {
       return res.status(400).json({ error: error.message });
@@ -74,7 +108,7 @@ export const getProfile = async (req, res) => {
     const { userId } = req.params;
 
     // Fetch Profile Info
-    const { data: profileData, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await req.supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
@@ -95,14 +129,14 @@ export const getUserPosts = async (req, res) => {
     const { userId } = req.params;
 
     // Fetch User's Posts with linked Store and Tag data
-    const { data: postsData, error: postsError } = await supabase
+    const { data: postsData, error: postsError } = await req.supabase
       .from('posts')
       .select(`
         *,
         stores ( name, address ),
-        post_tags ( 
-          treasure_tag ( name ) 
-        ) 
+        post_tags (
+          treasure_tag ( name )
+        )
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -121,7 +155,7 @@ export const getUserCommunities = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const { data: membershipData, error: membershipError } = await supabase
+    const { data: membershipData, error: membershipError } = await req.supabase
       .from('community_members')
       .select(`
         communities (*
@@ -150,12 +184,12 @@ export const getUserCommunities = async (req, res) => {
 
 export const isMember = async (req, res) => {
   try {
-    const { userId, communityId } = req.params;
+    const { communityId } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await req.supabase
       .from("community_members")
       .select('role') // Join to get member info
-      .eq("user_id", userId)
+      .eq("user_id", req.user.id)
       .eq("community_id", communityId);
 
     if (error) {
@@ -172,14 +206,15 @@ export const isMember = async (req, res) => {
 // --- JOIN COMMUNITY ---
 export const joinCommunity = async (req, res) => {
   try {
-    const { userId, communityId } = req.body;
+    const { communityId } = req.body;
+    const userId = req.user.id;
 
-    if (!userId || !communityId) {
-      return res.status(400).json({ error: "User ID and Community ID are required" });
+    if (!communityId) {
+      return res.status(400).json({ error: "Community ID is required" });
     }
 
     // 1. Insert the membership record
-    const { data: joinData, error: joinError } = await supabase
+    const { data: joinData, error: joinError } = await req.supabase
       .from("community_members")
       .insert([{ user_id: userId, community_id: communityId }])
       .select()
@@ -194,8 +229,8 @@ export const joinCommunity = async (req, res) => {
 
     // 2. Increment the member count in the communities table
     // We use .rpc() here because it's atomic (prevents "race conditions")
-    const { error: updateError } = await supabase.rpc('increment_community_members', { 
-      comm_id: communityId 
+    const { error: updateError } = await req.supabase.rpc('increment_community_members', {
+      comm_id: communityId
     });
 
     if (updateError) {
@@ -211,16 +246,16 @@ export const joinCommunity = async (req, res) => {
 // --- LEAVE COMMUNITY ---
 export const leaveCommunity = async (req, res) => {
   try {
-    const { userId, communityId } = req.body;
+    const { communityId } = req.body;
 
-    if (!userId || !communityId) {
-      return res.status(400).json({ error: "User ID and Community ID are required" });
+    if (!communityId) {
+      return res.status(400).json({ error: "Community ID is required" });
     }
 
-    const { error } = await supabase
+    const { error } = await req.supabase
       .from("community_members")
       .delete()
-      .eq("user_id", userId)
+      .eq("user_id", req.user.id)
       .eq("community_id", communityId);
 
     if (error) {

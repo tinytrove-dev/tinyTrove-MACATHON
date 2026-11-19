@@ -8,7 +8,7 @@ import {
   FlatList,
   StyleSheet,
 } from "react-native";
-import { supabase } from "../lib/supabase";
+import { contentApi } from "../lib/contentApi";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export interface TagPickerProps {
@@ -32,16 +32,15 @@ export default function TagPicker({ addTag, removeTag }: TagPickerProps) {
 
   useEffect(() => {
     async function fetchTags() {
-      const { data, error } = await supabase
-        .from("treasure_tag")
-        .select("id,name,photo");
-
-      if (!error) setAllTags(data || []);
+      try {
+        setAllTags(await contentApi.getTreasures());
+      } catch (error) {
+        console.error("Error fetching tags:", error);
+      }
     }
 
     fetchTags();
   }, []);
-  const treasureQuery = supabase.from("treasure_tag").select("id,name,photo");
 
   // const filtered = mockTags.filter((item) =>
   //  item.toLowerCase().includes(query.toLowerCase())
