@@ -35,7 +35,7 @@ const placeName = (address) => {
 
 async function geocodeWithGoogle(query) {
   // Read here, not at import, so it doesn't depend on .env being loaded first
-  const mapsApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  const mapsApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
   if (!mapsApiKey) return null;
   const response = await fetch(
     "https://maps.googleapis.com/maps/api/geocode/json?address=" +
@@ -96,17 +96,24 @@ export async function geocode(address) {
 // letting users edit stores, which anyone could then use to move one.
 const storeCache = new Map();
 
+const cachedGeocode = (key, address) => {
+  if (!storeCache.has(key)) {
+    const lookup = geocode(address);
+    storeCache.set(key, lookup);
+    // Don't remember failures, so a network blip doesn't stick for the whole run
+    lookup.then((place) => place || storeCache.delete(key));
+  }
+  return storeCache.get(key);
+};
+
 export async function getStoreLocation(store) {
   if (store.lat != null && store.lng != null) {
     return { lat: store.lat, lng: store.lng, radius_m: store.radius_m };
   }
-  if (!storeCache.has(store.id)) {
-    const lookup = geocode(store.address || store.name);
-    storeCache.set(store.id, lookup);
-    // Don't remember failures, so a network blip doesn't stick for the whole run
-    lookup.then((place) => place || storeCache.delete(store.id));
-  }
-  return storeCache.get(store.id);
+  return cachedGeocode(store.id, store.address || store.name);
 }
+
+// For older posts that only have a typed location, not a linked store
+export const getPlaceLocation = (text) => cachedGeocode(`text:${text}`, text);
 
 export { distanceMetres };

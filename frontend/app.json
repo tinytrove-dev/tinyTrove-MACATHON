@@ -12,6 +12,12 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "ios": {
+      "bundleIdentifier": "com.macathon.tinytrove"
+    },
+    "android": {
+      "package": "com.macathon.tinytrove"
+    },
     "plugins": [
       [
         "expo-location",

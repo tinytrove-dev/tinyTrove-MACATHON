@@ -58,14 +58,23 @@ export default function TreasureDetail({ treasure, onBack, onPostSelect, onFindL
     onClick: () => onPostSelect?.(p)
   }));
 
+  // One pin per store, even when several posts were found at the same one
   const postLocations = useMemo(() => {
-    const uniqueLocations = [...new Set(posts.map((post) => post.location).filter(Boolean))];
-
-    return uniqueLocations.map((location, index) => ({
-      id: `treasure-location-${index}`,
-      title: location,
-      address: location,
-    }));
+    const byStore = new Map();
+    posts.forEach((post) => {
+      const store = post.stores;
+      if (!store && !post.location) return;
+      const key = store?.id || post.location;
+      if (byStore.has(key)) return;
+      byStore.set(key, {
+        id: key,
+        title: store?.name || post.location,
+        address: store?.address || post.location,
+        lat: post.lat,
+        lng: post.lng,
+      });
+    });
+    return [...byStore.values()];
   }, [posts]);
 
   const headerComponent = (

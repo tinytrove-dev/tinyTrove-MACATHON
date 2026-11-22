@@ -1,8 +1,30 @@
 import { CHECKS_SELECT, summarizeChecks } from "./engagementController.js";
 
-import { geocode } from "../lib/geocode.js";
+import { geocode, getPlaceLocation, getStoreLocation } from "../lib/geocode.js";
 
 const cleanId = (id, prefix) => String(id).replace(new RegExp(`^${prefix}-`), "");
+
+const STORE_SELECT = "id, name, address, lat, lng";
+
+// Fills in coordinates for stores saved before they were geocoded, so the app
+// can place a map pin without looking up the address itself
+const withCoords = async (store) => {
+  if (!store) return store;
+  const place = await getStoreLocation(store).catch(() => null);
+  return { ...store, lat: place?.lat ?? null, lng: place?.lng ?? null };
+};
+
+// Adds lat/lng for where a post was found: its store, or else its typed location
+const withPostCoords = async (post) => {
+  const stores = await withCoords(post.stores);
+  const place =
+    stores?.lat != null
+      ? stores
+      : post.location
+        ? await getPlaceLocation(post.location).catch(() => null)
+        : null;
+  return { ...post, stores, lat: place?.lat ?? null, lng: place?.lng ?? null };
+};
 
 // --- SEARCH ---
 // Returns communities, stores and treasures matching ?q= (everything when empty)
@@ -17,7 +39,7 @@ export const search = async (req, res) => {
       .select("id,name,description,photo_url,banner_url,theme_color,number_of_members");
     const storeQuery = req.supabase
       .from("stores")
-      .select("id,name,address");
+      .select(STORE_SELECT);
     const treasureQuery = req.supabase
       .from("treasure_tag")
       .select("id,name,descriptor,photo");
@@ -54,7 +76,7 @@ export const search = async (req, res) => {
         ...community,
         treasures: treasureCountByCommunity[community.id] || 0,
       })),
-      stores: stores.data || [],
+      stores: await Promise.all((stores.data || []).map(withCoords)),
       treasures: treasures.data || [],
     });
   } catch (err) {
@@ -73,7 +95,7 @@ export const getPost = async (req, res) => {
         caption,
         location,
         photo_url,
-        stores ( name, address ),
+        stores ( ${STORE_SELECT} ),
         profiles!user_id ( username, display_name, avatar_url ),
         post_tags (
           treasure_tag (
@@ -92,7 +114,7 @@ export const getPost = async (req, res) => {
 
     const { post_checks, post_comments, ...post } = data;
     res.json({
-      ...post,
+      ...(await withPostCoords(post)),
       ...summarizeChecks(post_checks, req.user?.id),
       comment_count: post_comments?.[0]?.count ?? 0,
       is_mine: req.user?.id === data.user_id,
@@ -139,14 +161,14 @@ export const getTreasurePosts = async (req, res) => {
 
     const { data: postsData, error: postsError } = await req.supabase
       .from("posts")
-      .select("id, photo_url, location")
+      .select(`id, photo_url, location, stores ( ${STORE_SELECT} )`)
       .in("id", postIds);
 
     if (postsError) {
       return res.status(400).json({ error: postsError.message });
     }
 
-    res.json(postsData || []);
+    res.json(await Promise.all((postsData || []).map(withPostCoords)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

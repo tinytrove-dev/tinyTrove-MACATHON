@@ -98,11 +98,14 @@ export default function PostDetail({ post, userId, onBack, onOpenStore, onRequir
     "Username";
   const avatarUrl =
     postData?.profiles?.avatar_url || post?.profiles?.avatar_url || post?.photo_url || null;
+  const store = postData?.stores;
   const storeLocation = postData?.location
     ? {
-        id: postData.id,
-        title: postData.location,
-        address: postData.location,
+        id: store?.id || postData.id,
+        title: store?.name || postData.location,
+        address: store?.address || postData.location,
+        lat: postData.lat,
+        lng: postData.lng,
       }
     : null;
 

@@ -56,6 +56,8 @@ export function Search({ onStoreSelect, onCommunitySelect, onTreasureSelect }) {
         type: "store",
         name: store.name,
         address: store.address,
+        lat: store.lat,
+        lng: store.lng,
       }));
 
       const treasureResults = (treasureData || []).map((treasure) => ({
