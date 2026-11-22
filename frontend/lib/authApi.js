@@ -1,4 +1,4 @@
-import { axiosInstance, setAccessToken } from "./axios";
+import { axiosInstance, setSession, clearSession } from "./axios";
 
 export const authApi = {
   signIn: async (email, password) => {
@@ -6,7 +6,7 @@ export const authApi = {
       email,
       password,
     });
-    setAccessToken(response.data.session?.access_token);
+    setSession(response.data.session);
     return response.data;
   },
 
@@ -17,24 +17,27 @@ export const authApi = {
       username,
       displayName,
     });
-    setAccessToken(response.data.session?.access_token);
+    // No session when Supabase requires email confirmation first
+    if (response.data.session) setSession(response.data.session);
     return response.data;
   },
 
   signOut: async () => {
-    const response = await axiosInstance.post("/user-auth/sign-out");
-    setAccessToken(null);
-    return response.data;
-  },
-
-  // Saves the picture the backend just uploaded as the signed-in user's profile picture
-  updateAvatar: async (avatarUrl) => {
-    const response = await axiosInstance.put("/user-auth/avatar", { avatar_url: avatarUrl });
-    return response.data;
+    try {
+      const response = await axiosInstance.post("/user-auth/sign-out");
+      return response.data;
+    } finally {
+      clearSession();
+    }
   },
 
   getProfile: async (userId) => {
     const response = await axiosInstance.get(`/user-auth/profile/${userId}`);
+    return response.data;
+  },
+
+  updateAvatar: async (avatarUrl) => {
+    const response = await axiosInstance.patch("/user-auth/profile/avatar", { avatar_url: avatarUrl });
     return response.data;
   },
 
@@ -48,13 +51,18 @@ export const authApi = {
     return response.data;
   },
 
-  joinCommunity: async (userId, communityId) => {
-  const response = await axiosInstance.post("/user-auth/join-community", { userId, communityId });
-  return response.data;
+  isMember: async (communityId) => {
+    const response = await axiosInstance.get(`/user-auth/is-member/${communityId}`);
+    return response.data.isMember;
   },
 
-  leaveCommunity: async (userId, communityId) => {
-    const response = await axiosInstance.post("/user-auth/leave-community", { userId, communityId });
+  joinCommunity: async (communityId) => {
+    const response = await axiosInstance.post("/user-auth/join-community", { communityId });
+    return response.data;
+  },
+
+  leaveCommunity: async (communityId) => {
+    const response = await axiosInstance.post("/user-auth/leave-community", { communityId });
     return response.data;
   },
 };

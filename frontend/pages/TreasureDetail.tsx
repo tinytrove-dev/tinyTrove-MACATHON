@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Image, ImageSourcePropType, FlatList, Pressable } from "react-native";
 import Button from "../components/button";
-import { supabase } from "../lib/supabase";
+import { contentApi } from "../lib/contentApi";
 
 
 
@@ -20,25 +20,7 @@ export default function TreasureDetail({ treasure, onBack, onPostSelect, onFindL
 
   async function fetchPosts() {
     try {
-      const { data: postTags, error } = await supabase
-        .from('post_tags')
-        .select('post_id')
-        .eq('tag_id', treasure.id.replace(/^treasure-/, ""));
-
-      if (error) throw error;
-
-      const postIds = postTags.map(pt => pt.post_id);
-      if (postIds.length > 0) {
-        const { data: postsData, error: postsError } = await supabase
-          .from('posts')
-          .select('id, photo_url, location')
-          .in('id', postIds);
-
-        if (postsError) throw postsError;
-        setPosts(postsData || []);
-      } else {
-        setPosts([]);
-      }
+      setPosts(await contentApi.getTreasurePosts(treasure.id));
     } catch (error) {
       console.error('Error fetching posts:', error);
       setPosts([]);
@@ -47,25 +29,7 @@ export default function TreasureDetail({ treasure, onBack, onPostSelect, onFindL
 
   async function fetchCommunity() {
     try {
-      const { data: commData, error } = await supabase
-        .from('community_treasures')
-        .select(`
-          communities (
-            name,
-            photo_url
-          )
-        `)
-        .eq('treasure_id', treasure.id.replace(/^treasure-/, ""))
-        .maybeSingle();
-
-      if (error) {
-        console.error('Community fetch error:', error);
-        setCommunity(null);
-
-      } else {
-        setCommunity(commData?.communities);
-        // console.log(commData)
-      }
+      setCommunity(await contentApi.getTreasureCommunity(treasure.id));
     } catch (error) {
       console.error('Error fetching community:', error);
       setCommunity(null);

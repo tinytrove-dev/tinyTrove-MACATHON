@@ -138,8 +138,13 @@ export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     setLoading(true);
     try {
       const response = await authApi.signUp(email, password, username, displayName);
-      Alert.alert('Success', 'Welcome to tinyTrove! Check your email for verification.');
-      onLoginSuccess(response.user);
+      if (response.session) {
+        Alert.alert('Success', 'Welcome to tinyTrove!');
+        onLoginSuccess(response.user);
+      } else {
+        Alert.alert('Almost there', 'Check your email to verify your account, then sign in.');
+        setIsSignUp(false);
+      }
     } catch (error: any) {
       const message = error.response?.data?.error || error.message;
       const lower = String(message).toLowerCase();

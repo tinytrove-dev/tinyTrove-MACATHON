@@ -11,7 +11,7 @@ import {
   Alert,
 } from "react-native";
 import Button from "../components/button";
-import { supabase } from "../lib/supabase";
+import { contentApi } from "../lib/contentApi";
 import { authApi } from "../lib/authApi";
 import CreateTag from "./TagCreation";
 
@@ -20,8 +20,8 @@ export default function CommunityDetail({
   onBack, 
   onTreasureSelect, 
   onPostSelect,
-  checkStatus,
-  userId
+  userId,
+  onRequireSignIn
 }) {
   const [treasures, setTreasures] = useState([]);
   const [posts, setPosts] = useState([]);
@@ -36,11 +36,8 @@ export default function CommunityDetail({
     const fetchMembership = async () => {
       if (!userId || !community?.id) return;
       try {
-        const communitiesData = await authApi.getUserCommunities(userId);
         const currentId = String(community.id).replace(/^community-/, "");
-        const isJoined = communitiesData.some(
-          (c) => String(c.community_id || c.id).replace(/^community-/, "") === currentId
-        );
+        const isJoined = await authApi.isMember(currentId);
         setLocalMemberStatus(isJoined ? "member" : "non-member");
       } catch (error) {
         setLocalMemberStatus("non-member");
@@ -50,18 +47,18 @@ export default function CommunityDetail({
   }, [userId, community?.id]);
 
   const handleJoin = useCallback(async () => {
+    if (!userId) return onRequireSignIn?.();
     setActionLoading(true);
     try {
-      await authApi.joinCommunity(userId, community.id);
+      await authApi.joinCommunity(community.id);
       Alert.alert("Success", "Welcome to the Club!");
       setLocalMemberStatus("member");
-      if (checkStatus) await checkStatus();
     } catch (error) {
       Alert.alert("Error", error.message || "Could not join community");
     } finally {
       setActionLoading(false);
     }
-  }, [community, userId, checkStatus]);
+  }, [community, userId, onRequireSignIn]);
 
   const handleLeave = useCallback(async () => {
     Alert.alert("Leave Club?", "Are you sure you want to leave?", [
@@ -72,9 +69,8 @@ export default function CommunityDetail({
         onPress: async () => {
           setActionLoading(true);
           try {
-            await authApi.leaveCommunity(userId, community.id);
+            await authApi.leaveCommunity(community.id);
             setLocalMemberStatus("non-member");
-            if (checkStatus) await checkStatus();
           } catch (error) {
             Alert.alert("Error", "Could not leave community");
           } finally {
@@ -83,7 +79,7 @@ export default function CommunityDetail({
         },
       },
     ]);
-  }, [community, userId, checkStatus]);
+  }, [community, userId]);
 
   // --- 2. DATA FETCHING ---
   useEffect(() => {
@@ -96,46 +92,9 @@ export default function CommunityDetail({
     const communityId = String(community.id).replace(/^community-/, "");
 
     try {
-      const { data: communityTreasures, error: communityTreasuresError } = await supabase
-        .from("community_treasures")
-        .select("treasure_id")
-        .eq("community_id", communityId);
-
-      if (communityTreasuresError) throw communityTreasuresError;
-
-      const treasureIds = (communityTreasures || []).map((row) => row.treasure_id);
-      if (treasureIds.length > 0) {
-        const { data: treasureData, error: treasureError } = await supabase
-          .from("treasure_tag")
-          .select("id,name,descriptor,photo")
-          .in("id", treasureIds);
-
-        if (treasureError) throw treasureError;
-        setTreasures(treasureData || []);
-
-        const { data: postTags, error: postTagsError } = await supabase
-          .from("post_tags")
-          .select("post_id")
-          .in("tag_id", treasureIds);
-
-        if (postTagsError) throw postTagsError;
-
-        const postIds = Array.from(new Set((postTags || []).map((row) => row.post_id)));
-        if (postIds.length > 0) {
-          const { data: postsData, error: postsError } = await supabase
-            .from("posts")
-            .select("id,photo_url")
-            .in("id", postIds);
-
-          if (postsError) throw postsError;
-          setPosts(postsData || []);
-        } else {
-          setPosts([]);
-        }
-      } else {
-        setTreasures([]);
-        setPosts([]);
-      }
+      const { treasures, posts } = await contentApi.getCommunityContent(communityId);
+      setTreasures(treasures);
+      setPosts(posts);
     } catch (error) {
       console.error("Error fetching community treasures/posts:", error);
       setTreasures([]);
@@ -166,7 +125,8 @@ export default function CommunityDetail({
   const postImages = posts.map((item) => ({
     id: item.id,
     source: { uri: item.photo_url || "https://via.placeholder.com/100" },
-    onClick: () => onPostSelect?.(item),
+    // Pass the whole list so the post can be swiped through to its neighbours
+    onClick: () => onPostSelect?.(item, posts),
   }));
 
   // --- 3. HEADER COMPONENT (Wrapped in useMemo for touch reliability) ---
