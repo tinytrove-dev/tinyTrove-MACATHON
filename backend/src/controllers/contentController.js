@@ -266,6 +266,66 @@ export const getStores = async (req, res) => {
   }
 };
 
+// Posts found at a store (or at a typed location with no store), newest first,
+// and the treasures tagged in them, most posted first.
+// GET ?store_id=... and/or ?name=...
+export const getPlaceContent = async (req, res) => {
+  try {
+    const storeId = String(req.query.store_id || "").trim();
+    let name = String(req.query.name || "").trim();
+
+    if (storeId) {
+      const { data: store, error } = await req.supabase
+        .from("stores")
+        .select("name")
+        .eq("id", storeId)
+        .maybeSingle();
+      if (error) return res.status(400).json({ error: error.message });
+      name = store?.name || name;
+    }
+    if (!storeId && !name) {
+      return res.status(400).json({ error: "store_id or name is required" });
+    }
+
+    // Older posts were saved with only the store's name, not its id, so match
+    // both. LIKE wildcards in the name are escaped so it's matched exactly.
+    const select =
+      "id, photo_url, caption, location, created_at, post_tags ( treasure_tag ( id, name, descriptor, photo ) )";
+    const queries = [];
+    if (storeId) queries.push(req.supabase.from("posts").select(select).eq("store_id", storeId));
+    if (name) {
+      const exactName = name.replace(/[\\%_]/g, "\\$&");
+      queries.push(req.supabase.from("posts").select(select).ilike("location", exactName));
+    }
+
+    const results = await Promise.all(queries);
+    const failed = results.find((result) => result.error);
+    if (failed) {
+      return res.status(400).json({ error: failed.error.message });
+    }
+
+    const byId = new Map(results.flatMap((result) => result.data || []).map((post) => [post.id, post]));
+    const data = [...byId.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const treasures = new Map();
+    for (const post of data) {
+      for (const { treasure_tag: treasure } of post.post_tags || []) {
+        if (!treasure) continue;
+        const entry = treasures.get(treasure.id) || { ...treasure, post_count: 0 };
+        entry.post_count += 1;
+        treasures.set(treasure.id, entry);
+      }
+    }
+
+    res.json({
+      treasures: [...treasures.values()].sort((a, b) => b.post_count - a.post_count),
+      posts: data.map(({ post_tags, ...post }) => post),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Geocodes the store name to an address and location, then saves it
 export const createStore = async (req, res) => {
   try {

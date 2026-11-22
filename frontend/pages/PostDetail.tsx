@@ -102,6 +102,7 @@ export default function PostDetail({ post, userId, onBack, onOpenStore, onRequir
   const storeLocation = postData?.location
     ? {
         id: store?.id || postData.id,
+        storeId: store?.id,
         title: store?.name || postData.location,
         address: store?.address || postData.location,
         lat: postData.lat,

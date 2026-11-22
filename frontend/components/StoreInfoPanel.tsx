@@ -1,109 +1,215 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Image,
-  FlatList,
-  TouchableOpacity,
-  Dimensions,
+  Pressable,
+  ActivityIndicator,
+  Animated,
+  PanResponder,
+  LayoutChangeEvent,
 } from "react-native";
+import { contentApi } from "../lib/contentApi";
+import type { MapLocation } from "./LocationsMap";
 
-//todo: get real info
-const tempImage1 = require("./profile_temp.png");
-const tempImage2 = require("./gridimage_temp.jpg");
+const fallbackImage = require("./profile_temp.png");
 
-const samplePhotos = [
-  { id: "1", uri: tempImage1, caption: "Kuromi" },
-  { id: "2", uri: tempImage2, caption: "My Melody" },
-  { id: "3", uri: tempImage1, caption: "Pom Purin" },
-  { id: "4", uri: tempImage2, caption: "Baby Yoda" },
-];
+// Space left under the header when minimised, matching the panel's padding
+const COLLAPSED_BOTTOM_GAP = 10;
 
-const gridPhotos = [
-  { id: "1", uri: tempImage1 },
-  { id: "2", uri: tempImage2 },
-  { id: "3", uri: tempImage1 },
-  { id: "4", uri: tempImage2 },
-  { id: "5", uri: tempImage1 },
-  { id: "6", uri: tempImage2 },
-];
-
-interface StoreInfoPanelProps {
-  location: {
-    id: string;
-    title: string;
-    address: string;
-  };
-  onClose?: () => void;
+interface PlaceTreasure {
+  id: string;
+  name: string;
+  descriptor?: string;
+  photo?: string;
+  post_count: number;
 }
 
-export default function StoreInfoPanel({ location, onClose }: StoreInfoPanelProps) {
-  const screenWidth = Dimensions.get("window").width;
-  const panelHorizontalMargin = 24; // left 12 + right 12
-  const panelInnerPadding = 20; // paddingHorizontal 10 on both sides
-  const gridGap = 8;
-  const gridItemWidth =
-    (screenWidth - panelHorizontalMargin - panelInnerPadding - gridGap) / 2;
+interface PlacePost {
+  id: string;
+  photo_url?: string;
+  caption?: string;
+}
 
-  const renderPhotoCarousel = ({ item }) => (
-    <View style={styles.carouselItem}>
-      <Image source={item.uri} style={styles.carouselImage} />
-      <Text style={styles.carouselCaption}>{item.caption}</Text>
-    </View>
-  );
+interface StoreInfoPanelProps {
+  location: MapLocation;
+  collapsed?: boolean;
+  // Called when the user taps or drags the header to minimise or reopen it
+  onCollapsedChange?: (collapsed: boolean) => void;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  onPostSelect?: (post: PlacePost) => void;
+  onTreasureSelect?: (treasure: PlaceTreasure) => void;
+}
 
-  const renderGridPhoto = ({ item }) => (
-    <View style={styles.gridItemWrapper}>
-      <Image source={item.uri} style={styles.gridImage} />
-    </View>
-  );
+export default function StoreInfoPanel({
+  location,
+  collapsed = false,
+  onCollapsedChange,
+  onLayout,
+  onPostSelect,
+  onTreasureSelect,
+}: StoreInfoPanelProps) {
+  const [content, setContent] = useState<{ treasures: PlaceTreasure[]; posts: PlacePost[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // Minimising slides the whole panel down until only the header shows
+  const [panelHeight, setPanelHeight] = useState(0);
+  const [headerBottom, setHeaderBottom] = useState(0);
+  const collapsedOffset = Math.max(0, panelHeight - headerBottom - COLLAPSED_BOTTOM_GAP);
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  // Kept in refs so the drag handlers, created once, see current values
+  const dragState = useRef({ start: 0, collapsedOffset, collapsed, onCollapsedChange });
+  dragState.current.collapsedOffset = collapsedOffset;
+  dragState.current.collapsed = collapsed;
+  dragState.current.onCollapsedChange = onCollapsedChange;
+
+  useEffect(() => {
+    Animated.spring(translateY, {
+      toValue: collapsed ? collapsedOffset : 0,
+      useNativeDriver: true,
+      bounciness: 0,
+      speed: 14,
+    }).start();
+  }, [collapsed, collapsedOffset, translateY]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Only take over for vertical drags, so taps still reach the header
+      onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx),
+      onPanResponderGrant: () => {
+        translateY.stopAnimation((value) => {
+          dragState.current.start = value;
+        });
+      },
+      onPanResponderMove: (_, { dy }) => {
+        const { start, collapsedOffset: max } = dragState.current;
+        const next = start + dy;
+        // Resist dragging past fully open, rather than stopping dead
+        translateY.setValue(next < 0 ? next / 4 : Math.min(next, max));
+      },
+      onPanResponderRelease: (_, { dy, vy }) => {
+        const { start, collapsedOffset: max, collapsed: wasCollapsed, onCollapsedChange: notify } =
+          dragState.current;
+        const position = start + dy;
+        // A quick flick decides it; otherwise go to whichever end is closer
+        const shouldCollapse = Math.abs(vy) > 0.5 ? vy > 0 : position > max / 2;
+        if (shouldCollapse === wasCollapsed) {
+          Animated.spring(translateY, {
+            toValue: shouldCollapse ? max : 0,
+            useNativeDriver: true,
+            bounciness: 0,
+            speed: 14,
+          }).start();
+        }
+        notify?.(shouldCollapse);
+      },
+      onPanResponderTerminationRequest: () => false,
+    })
+  ).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    setContent(null);
+    setFailed(false);
+    contentApi
+      .getPlaceContent({ storeId: location.storeId, name: location.title })
+      .then((data) => !cancelled && setContent(data))
+      .catch((error) => {
+        console.error("Error fetching store content:", error);
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.storeId, location.title]);
+
+  const renderSectionBody = (items: unknown[], emptyText: string, render: () => React.ReactNode) => {
+    if (failed) return <Text style={styles.emptyText}>Couldn't load this right now.</Text>;
+    if (!content) return <ActivityIndicator color="#8C5A3C" style={styles.loading} />;
+    if (items.length === 0) return <Text style={styles.emptyText}>{emptyText}</Text>;
+    return render();
+  };
 
   return (
-    <View style={styles.panel}>
-      <ScrollView showsVerticalScrollIndicator={true} style={styles.scrollContent}>
-        {/* Header with Name and Address */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.storeName}>{location.title}</Text>
-            {onClose && (
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.storeAddress}>{location.address}</Text>
-        </View>
+    <Animated.View
+      style={[styles.panel, { transform: [{ translateY }] }]}
+      onLayout={(event) => {
+        setPanelHeight(event.nativeEvent.layout.height);
+        onLayout?.(event);
+      }}
+    >
+      {/* Header with Name and Address: tap or drag it to minimise or reopen */}
+      <View
+        {...panResponder.panHandlers}
+        onLayout={(event) => {
+          const { y, height } = event.nativeEvent.layout;
+          setHeaderBottom(y + height);
+        }}
+      >
+        <Pressable
+          onPress={() => onCollapsedChange?.(!collapsed)}
+          style={styles.header}
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? "Show store details" : "Minimise store details"}
+        >
+          <View style={styles.handle} />
+          <Text style={styles.storeName}>{location.title}</Text>
+          {location.address && location.address !== location.title ? (
+            <Text style={styles.storeAddress}>{location.address}</Text>
+          ) : null}
+        </Pressable>
+      </View>
 
-        {/* Horizontal Scrollable Photos */}
+      <ScrollView showsVerticalScrollIndicator={true} style={styles.scrollContent}>
+        {/* Treasures posted here */}
         <View style={styles.carouselSection}>
           <Text style={styles.sectionTitle}>Treasures</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.carousel}
-          >
-            {samplePhotos.map((photo) => (
-              <View key={photo.id}>{renderPhotoCarousel({ item: photo })}</View>
-            ))}
-          </ScrollView>
+          {renderSectionBody(content?.treasures ?? [], "No treasures spotted here yet.", () => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carousel}>
+              {content!.treasures.map((treasure) => (
+                <Pressable
+                  key={treasure.id}
+                  style={styles.carouselItem}
+                  onPress={() => onTreasureSelect?.(treasure)}
+                >
+                  <Image
+                    source={treasure.photo ? { uri: treasure.photo } : fallbackImage}
+                    style={styles.carouselImage}
+                  />
+                  <Text style={styles.carouselCaption} numberOfLines={2}>
+                    {treasure.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ))}
         </View>
 
-        {/* Grid of Photos */}
+        {/* Posts from here */}
         <View style={styles.gridSection}>
           <Text style={styles.sectionTitle}>Posts</Text>
-          <FlatList
-            scrollEnabled={false}
-            data={gridPhotos}
-            renderItem={renderGridPhoto}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.gridRow}
-          />
+          {renderSectionBody(content?.posts ?? [], "No posts from here yet.", () => (
+            <View style={styles.grid}>
+              {content!.posts.map((post) => (
+                <Pressable
+                  key={post.id}
+                  style={styles.gridItemWrapper}
+                  onPress={() => onPostSelect?.(post)}
+                >
+                  <Image
+                    source={post.photo_url ? { uri: post.photo_url } : fallbackImage}
+                    style={styles.gridImage}
+                  />
+                </Pressable>
+              ))}
+            </View>
+          ))}
         </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -139,29 +245,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
 
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255, 248, 240, 0.6)",
+    marginBottom: 8,
   },
 
   storeName: {
     fontSize: 22,
     fontWeight: "700",
     color: "#FFF8F0",
-    flex: 1,
     marginBottom: 2,
-  },
-
-  closeBtn: {
-    paddingLeft: 8,
-    paddingTop: 2,
-  },
-
-  closeBtnText: {
-    fontSize: 20,
-    color: "#FFF8F0",
-    fontWeight: "400",
   },
 
   storeAddress: {
@@ -215,14 +312,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  gridRow: {
-  justifyContent: "space-between",
-  marginBottom: 8,
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
 
   gridItemWrapper: {
     width: "48.5%",
     aspectRatio: 1,
+    marginBottom: 8,
   },
 
   gridImage: {
@@ -230,6 +329,15 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 6,
     backgroundColor: "#ffffff",
+  },
+
+  emptyText: {
+    fontSize: 14,
+    color: "#6B5342",
+  },
+
+  loading: {
+    alignSelf: "flex-start",
   },
 
 });

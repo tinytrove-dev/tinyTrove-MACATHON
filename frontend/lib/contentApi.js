@@ -49,6 +49,14 @@ export const contentApi = {
     return response.data;
   },
 
+  // Returns { treasures, posts } for a store, or a typed location with no store
+  getPlaceContent: async ({ storeId, name }) => {
+    const response = await axiosInstance.get("/content/place-content", {
+      params: { store_id: storeId || undefined, name: name || undefined },
+    });
+    return response.data;
+  },
+
   createStore: async (name) => {
     const response = await axiosInstance.post("/content/stores", { name });
     return response.data;

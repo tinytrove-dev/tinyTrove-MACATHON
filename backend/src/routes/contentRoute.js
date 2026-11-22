@@ -7,6 +7,7 @@ import {
   getTreasureCommunity,
   getCommunityContent,
   getStores,
+  getPlaceContent,
   createStore,
 } from "../controllers/contentController.js";
 import { getComments } from "../controllers/engagementController.js";
@@ -23,6 +24,7 @@ router.get("/treasures/:treasureId/posts", optionalAuth, getTreasurePosts);
 router.get("/treasures/:treasureId/community", optionalAuth, getTreasureCommunity);
 router.get("/communities/:communityId/content", optionalAuth, getCommunityContent);
 router.get("/stores", optionalAuth, getStores);
+router.get("/place-content", optionalAuth, getPlaceContent);
 
 // Signed-in users only
 router.post("/stores", requireAuth, createStore);

@@ -68,6 +68,7 @@ export default function TreasureDetail({ treasure, onBack, onPostSelect, onFindL
       if (byStore.has(key)) return;
       byStore.set(key, {
         id: key,
+        storeId: store?.id,
         title: store?.name || post.location,
         address: store?.address || post.location,
         lat: post.lat,

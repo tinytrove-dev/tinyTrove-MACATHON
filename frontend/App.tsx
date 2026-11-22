@@ -17,7 +17,6 @@ import Map from './pages/Map'
 import Post from './pages/Post';
 import CreateCommunity from './pages/CommunityUpload';
 import { Search } from './pages/Search';
-import StoreMap from './pages/StoreMap';
 import CommunityDetail from './pages/CommunityDetail';
 import TreasureDetail from './pages/TreasureDetail';
 import PostDetail from './pages/PostDetail';
@@ -103,13 +102,30 @@ export default function App() {
       case "feed":
         return null; // rendered separately below so it survives navigation
       case "map":
-        return <Map locations={route.item || []} />;
+        return (
+          <Map
+            locations={route.item || []}
+            onPostSelect={(post) => navigate("postDetail", post)}
+            onTreasureSelect={(treasure) => navigate("treasureDetail", treasure)}
+          />
+        );
       case "post":
         return <Post userId={userId} setActivePage={openTab} />;
       case "search":
         return (
           <Search
-            onStoreSelect={(store) => navigate("storeMap", store)}
+            onStoreSelect={(store) =>
+              navigate("map", [
+                {
+                  id: store.id,
+                  storeId: store.id,
+                  title: store.name,
+                  address: store.address,
+                  lat: store.lat,
+                  lng: store.lng,
+                },
+              ])
+            }
             onCommunitySelect={(community) => navigate("communityDetail", community)}
             onTreasureSelect={(treasure) => navigate("treasureDetail", treasure)}
           />
@@ -126,8 +142,6 @@ export default function App() {
         );
       case "createCommunity":
         return <CreateCommunity userId={userId} onGoBack={goBack} />;
-      case "storeMap":
-        return <StoreMap store={route.item} onBack={goBack} />;
       case "communityDetail":
         return (
           <CommunityDetail
