@@ -58,24 +58,46 @@ export default function TreasureDetail({ treasure, onBack, onPostSelect, onFindL
     onClick: () => onPostSelect?.(p)
   }));
 
-  // One pin per store, even when several posts were found at the same one
+  // One pin per store, even when several posts were found at the same one,
+  // summarising those posts for the map's filters
   const postLocations = useMemo(() => {
     const byStore = new Map();
     posts.forEach((post) => {
       const store = post.stores;
       if (!store && !post.location) return;
       const key = store?.id || post.location;
-      if (byStore.has(key)) return;
-      byStore.set(key, {
+      const place = byStore.get(key) ?? {
         id: key,
         storeId: store?.id,
         title: store?.name || post.location,
         address: store?.address || post.location,
         lat: post.lat,
         lng: post.lng,
-      });
+        details: { price: null, lastSeenAt: null, stockStatus: null, allSoldOut: true },
+      };
+      const details = place.details;
+
+      if (post.price != null && (details.price == null || post.price < details.price)) {
+        details.price = post.price;
+      }
+      // Last seen: the newer of when it was posted and when someone last confirmed it
+      for (const date of [post.created_at, post.stock_status === "validated" ? post.stock_updated_at : null]) {
+        if (date && (!details.lastSeenAt || date > details.lastSeenAt)) details.lastSeenAt = date;
+      }
+      // In stock if any post here is confirmed; sold out only if every post here is
+      if (post.stock_status === "validated") details.stockStatus = "validated";
+      if (post.stock_status !== "sold_out") details.allSoldOut = false;
+
+      byStore.set(key, place);
     });
-    return [...byStore.values()];
+
+    return [...byStore.values()].map(({ details: { allSoldOut, ...details }, ...place }) => ({
+      ...place,
+      details: {
+        ...details,
+        stockStatus: details.stockStatus ?? (allSoldOut ? "sold_out" : null),
+      },
+    }));
   }, [posts]);
 
   const headerComponent = (

@@ -13,6 +13,13 @@ const inIosExpoGo =
   Platform.OS === "ios" && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 const MAP_PROVIDER = inIosExpoGo ? undefined : PROVIDER_GOOGLE;
 
+// What's known about a treasure at a place, for filtering the map
+export interface PlaceDetails {
+  price?: number | null; // lowest price posted there
+  lastSeenAt?: string | null; // newest post or in-stock confirmation
+  stockStatus?: "validated" | "sold_out" | null;
+}
+
 export interface MapLocation {
   id: string;
   storeId?: string | null;
@@ -20,7 +27,11 @@ export interface MapLocation {
   address: string;
   lat?: number | null;
   lng?: number | null;
+  details?: PlaceDetails;
 }
+
+const HIGHLIGHT_COLOR = "#FF4F8B";
+const FADED_OPACITY = 0.35;
 
 // Monash Clayton, shown when there's nothing to pin and no user location yet
 const DEFAULT_REGION = {
@@ -46,6 +57,8 @@ interface LocationsMapProps {
   onMapPress?: () => void;
   // Height covered by a panel at the bottom, so pins stay visible above it
   bottomInset?: number;
+  // When set, these pins stand out and the rest fade. null shows all pins normally.
+  highlightedIds?: Set<string> | null;
 }
 
 export default function LocationsMap({
@@ -53,6 +66,7 @@ export default function LocationsMap({
   onSelect,
   onMapPress,
   bottomInset = 0,
+  highlightedIds = null,
 }: LocationsMapProps) {
   const mapRef = useRef<MapView>(null);
   const centeredOnUser = useRef(false);
@@ -152,17 +166,24 @@ export default function LocationsMap({
         onUserLocationChange={centerOnUser}
         mapPadding={{ top: 0, right: 0, bottom: bottomInset, left: 0 }}
       >
-        {pinned.map((loc) => (
-          <Marker
-            key={loc.id}
-            coordinate={{ latitude: loc.lat!, longitude: loc.lng! }}
-            title={loc.title}
-            description={loc.address}
-            // Usually already handled by the touch check above; this catches
-            // taps on the edge of a pin that it missed
-            onPress={() => onSelect?.(loc)}
-          />
-        ))}
+        {pinned.map((loc) => {
+          const look = !highlightedIds ? "normal" : highlightedIds.has(loc.id) ? "match" : "faded";
+          return (
+            <Marker
+              // Pin colours don't always update in place, so redraw when the look changes
+              key={`${loc.id}-${look}`}
+              coordinate={{ latitude: loc.lat!, longitude: loc.lng! }}
+              title={loc.title}
+              description={loc.address}
+              pinColor={look === "match" ? HIGHLIGHT_COLOR : undefined}
+              opacity={look === "faded" ? FADED_OPACITY : 1}
+              zIndex={look === "match" ? 2 : look === "faded" ? 0 : 1}
+              // Usually already handled by the touch check above; this catches
+              // taps on the edge of a pin that it missed
+              onPress={() => onSelect?.(loc)}
+            />
+          );
+        })}
       </MapView>
     </View>
   );

@@ -2,13 +2,14 @@ import { axiosInstance } from "./axios";
 
 // The signed-in user is taken from the session token, so no userId is sent.
 export const postApi = {
-  createPost: async (image, description, location, tags) => {
+  createPost: async (image, description, location, tags, price = null) => {
     try {
       const response = await axiosInstance.post("/post/create-post", {
         image,
         description,
         location,
         tags,
+        price,
       });
       return response.data;
     } catch (err) {

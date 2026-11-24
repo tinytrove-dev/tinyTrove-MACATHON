@@ -2,6 +2,12 @@ export const createPost = async (req, res) => {
   try {
     // 1. Extract the incoming data
     const { image, description, location, tags } = req.body;
+    // Optional. Anything that isn't a sensible amount is saved as no price.
+    const price = Number(req.body.price);
+    const validPrice =
+      req.body.price != null && req.body.price !== "" && Number.isFinite(price) && price >= 0 && price < 100000
+        ? Math.round(price * 100) / 100
+        : null;
     const userId = req.user.id;
     const normalizedTags = Array.isArray(tags)
       ? tags.filter((tag) => tag?.id)
@@ -36,6 +42,7 @@ export const createPost = async (req, res) => {
           caption: description,
           location: location,
           store_id: store?.id ?? null,
+          price: validPrice,
           // The current schema still expects a single treasure_tag FK on posts.
           treasure_tag: normalizedTags[0].id,
         },

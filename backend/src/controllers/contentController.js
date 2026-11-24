@@ -161,14 +161,22 @@ export const getTreasurePosts = async (req, res) => {
 
     const { data: postsData, error: postsError } = await req.supabase
       .from("posts")
-      .select(`id, photo_url, location, stores ( ${STORE_SELECT} )`)
+      .select(`id, photo_url, location, price, created_at, stores ( ${STORE_SELECT} ), ${CHECKS_SELECT}`)
       .in("id", postIds);
 
     if (postsError) {
       return res.status(400).json({ error: postsError.message });
     }
 
-    res.json(await Promise.all((postsData || []).map(withPostCoords)));
+    // Price, date and stock let the map's filters pick out the best places to look
+    res.json(
+      await Promise.all(
+        (postsData || []).map(async ({ post_checks, ...post }) => {
+          const { stock_status, stock_updated_at } = summarizeChecks(post_checks, req.user?.id);
+          return { ...(await withPostCoords(post)), stock_status, stock_updated_at };
+        })
+      )
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

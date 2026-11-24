@@ -20,6 +20,7 @@ import { useKeyboardScroll } from "../lib/useKeyboardScroll";
 export default function Post({ userId, setActivePage }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
   const [location, setLocation] = useState(null);
   const [tags, setTags] = useState<TagProps[]>([]);
 
@@ -29,6 +30,7 @@ export default function Post({ userId, setActivePage }) {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const descriptionRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const priceRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const { scrollRef, onScroll, keyboardPadding, scrollToInput } = useKeyboardScroll();
 
   const handleUploadComplete = (url: string) => {
@@ -54,13 +56,22 @@ export default function Post({ userId, setActivePage }) {
       return;
     }
 
+    // Optional, but if given it has to be a real amount
+    const priceText = price.trim().replace(/^\$/, "");
+    const priceValue = priceText ? Number(priceText) : null;
+    if (priceValue != null && (!Number.isFinite(priceValue) || priceValue < 0)) {
+      Alert.alert("Error", "Price should be a number, like 24.95");
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await postApi.createPost(
         uploadedImageUrl,
         description,
         location,
-        tags
+        tags,
+        priceValue
       );
 
       Alert.alert("Success", "Post Created!");
@@ -71,6 +82,7 @@ export default function Post({ userId, setActivePage }) {
       // Clear the form after success
       setTitle("");
       setDescription("");
+      setPrice("");
       setImage("");
       setTags([]);
       setLocation(null);
@@ -116,6 +128,19 @@ export default function Post({ userId, setActivePage }) {
         />
 
         <LocationPicker chooseLocation={setLocation} />
+
+        <Text style={styles.label}>Price (optional)</Text>
+        <TextInput
+          ref={priceRef}
+          onFocus={() => scrollToInput(priceRef)}
+          style={styles.input}
+          placeholder="$ e.g. 24.95"
+          placeholderTextColor="#555"
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="decimal-pad"
+          editable={!loading}
+        />
 
         {/* Fixed the filter bug here */}
         <TagPicker
